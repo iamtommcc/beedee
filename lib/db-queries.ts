@@ -1,0 +1,82 @@
+"use server"
+
+import { getDbClient } from "./db"
+import type { EventRecord, WebpageConfig } from "./types"
+
+export async function getWebpages(): Promise<WebpageConfig[]> {
+  const sql = getDbClient()
+  try {
+    const result = await sql<WebpageConfig[]>`
+      SELECT id, url, organisation_title, created_at, last_scraped_at, status, error_message 
+      FROM webpages_to_scrape 
+      ORDER BY created_at DESC
+    `
+    return result
+  } catch (error: any) {
+    console.error("Failed to fetch webpages:", error)
+    // It's important to check if the error is "relation does not exist"
+    // and guide the user to run the schema script.
+    if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
+      console.error(
+        "DATABASE SCHEMA MISSING: Please run the SQL script to create tables (e.g., scripts/001-create-tables.sql).",
+      )
+    }
+    return []
+  }
+}
+
+export async function getEventsForMonth(year: number, month: number): Promise<EventRecord[]> {
+  const sql = getDbClient()
+  const startDate = new Date(year, month - 1, 1)
+  const endDate = new Date(year, month, 0) // Last day of the month
+
+  try {
+    const result = (await sql`
+      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
+      FROM events e
+      LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
+      WHERE e.event_date >= ${startDate.toISOString().split("T")[0]} AND e.event_date <= ${endDate.toISOString().split("T")[0]}
+        AND e.deleted_at IS NULL
+      ORDER BY e.event_date, e.event_time
+    `) as unknown as Array<Omit<EventRecord, "event_date"> & { event_date: string, organisation_title?: string }>
+
+    return result.map((event) => ({
+      ...event,
+      event_date: new Date(event.event_date),
+    }))
+  } catch (error: any) {
+    console.error("Failed to fetch events for month:", error)
+    if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
+      console.error(
+        "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
+      )
+    }
+    return []
+  }
+}
+
+export async function getAllEvents(): Promise<EventRecord[]> {
+  const sql = getDbClient()
+  try {
+    const result = (await sql`
+      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
+      FROM events e
+      LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
+      WHERE e.deleted_at IS NULL
+      ORDER BY e.event_date DESC, e.event_time
+    `) as unknown as Array<Omit<EventRecord, "event_date"> & { event_date: string, organisation_title?: string }>
+
+    return result.map((event) => ({
+      ...event,
+      event_date: new Date(event.event_date),
+    }))
+  } catch (error: any) {
+    console.error("Failed to fetch all events:", error)
+    if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
+      console.error(
+        "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
+      )
+    }
+    return []
+  }
+}
