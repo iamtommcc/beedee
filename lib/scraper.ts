@@ -15,7 +15,7 @@ const google = createGoogleGenerativeAI({
 // Initialize Playwright crawler client
 const crawlApp = createCrawl({
   maxRetry: 3,
-  timeout: 5000
+  timeout: 10000
 })
 console.log("[Scraper] Playwright crawler client initialized.")
 
