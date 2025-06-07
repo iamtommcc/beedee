@@ -6,11 +6,11 @@ import type { EventRecord, WebpageConfig } from "./types"
 export async function getWebpages(): Promise<WebpageConfig[]> {
   const sql = getDbClient()
   try {
-    const result = await sql<WebpageConfig[]>`
+    const result = await sql`
       SELECT id, url, organisation_title, created_at, last_scraped_at, status, error_message 
       FROM webpages_to_scrape 
       ORDER BY created_at DESC
-    `
+    ` as WebpageConfig[]
     return result
   } catch (error: any) {
     console.error("Failed to fetch webpages:", error)
@@ -38,12 +38,9 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
       WHERE e.event_date >= ${startDate.toISOString().split("T")[0]} AND e.event_date <= ${endDate.toISOString().split("T")[0]}
         AND e.deleted_at IS NULL
       ORDER BY e.event_date, e.event_time
-    `) as unknown as Array<Omit<EventRecord, "event_date"> & { event_date: string, organisation_title?: string }>
+    `) as EventRecord[]
 
-    return result.map((event) => ({
-      ...event,
-      event_date: new Date(event.event_date),
-    }))
+    return result
   } catch (error: any) {
     console.error("Failed to fetch events for month:", error)
     if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
@@ -64,12 +61,9 @@ export async function getAllEvents(): Promise<EventRecord[]> {
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.deleted_at IS NULL
       ORDER BY e.event_date DESC, e.event_time
-    `) as unknown as Array<Omit<EventRecord, "event_date"> & { event_date: string, organisation_title?: string }>
+    `) as EventRecord[]
 
-    return result.map((event) => ({
-      ...event,
-      event_date: new Date(event.event_date),
-    }))
+    return result
   } catch (error: any) {
     console.error("Failed to fetch all events:", error)
     if (error.message?.includes("relation") && error.message?.includes("does not exist")) {

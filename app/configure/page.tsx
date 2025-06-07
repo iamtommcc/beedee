@@ -1,7 +1,7 @@
 import { AddUrlForm } from "@/components/add-url-form"
+import { Separator } from "@/components/ui/separator"
 import { UrlList } from "@/components/url-list"
 import { getWebpages } from "@/lib/db-queries"
-import { Separator } from "@/components/ui/separator"
 
 export default async function ConfigurePage() {
   const webpages = await getWebpages()
@@ -21,6 +21,3 @@ export default async function ConfigurePage() {
     </div>
   )
 }
-
-// Add default export for Next.js
-export const getConfig = () => ({})

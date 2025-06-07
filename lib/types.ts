@@ -20,7 +20,6 @@ export interface EventData {
 
 export interface EventRecord extends EventData {
   id: number
-  event_date: Date // Ensure this is Date type for calendar
   scraped_at: string // This was string, assuming it's a timestamp string
   deleted_at?: string | null // For soft deletion
   webpage_config_id?: number

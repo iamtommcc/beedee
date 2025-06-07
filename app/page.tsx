@@ -16,6 +16,3 @@ export default async function HomePage() {
     </div>
   )
 }
-
-// Add default export for Next.js
-export const getConfig = () => ({})

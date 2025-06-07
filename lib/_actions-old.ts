@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { getDbClient } from "./db"
+import type { EventData } from "./scraper"; // Assuming EventData is exported
 import { scrapeUrlAndStoreEvents } from "./scraper"
-import type { EventData } from "./scraper" // Assuming EventData is exported
 
 export interface WebpageConfig {
   id: number
@@ -16,7 +16,6 @@ export interface WebpageConfig {
 
 export interface EventRecord extends EventData {
   id: number
-  event_date: Date // Ensure this is Date type for calendar
   scraped_at: string
 }
 
@@ -30,7 +29,7 @@ export async function addWebpage(formData: FormData) {
 
   try {
     const existing = await sql`SELECT id FROM webpages_to_scrape WHERE url = ${url}`
-    if (existing.count > 0) {
+    if (existing.length > 0) {
       return { error: "URL already exists." }
     }
 
@@ -49,11 +48,11 @@ export async function addWebpage(formData: FormData) {
 export async function getWebpages(): Promise<WebpageConfig[]> {
   const sql = getDbClient()
   try {
-    const result = await sql<WebpageConfig[]>`
+    const result = await sql`
       SELECT id, url, created_at, last_scraped_at, status, error_message 
       FROM webpages_to_scrape 
       ORDER BY created_at DESC
-    `
+    ` as WebpageConfig[]
     return result
   } catch (error: any) {
     console.error("Failed to fetch webpages:", error)
@@ -93,17 +92,13 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
   const endDate = new Date(year, month, 0) // Last day of the month
 
   try {
-    const result = await sql<EventRecord[]>`
+    const result = await sql`
       SELECT id, title, event_date, event_time, location, description, source_url, scraped_at
       FROM events
       WHERE event_date >= ${startDate.toISOString().split("T")[0]} AND event_date <= ${endDate.toISOString().split("T")[0]}
       ORDER BY event_date, event_time
-    `
-    // Ensure event_date is a Date object
-    return result.map((event) => ({
-      ...event,
-      event_date: new Date(event.event_date),
-    }))
+    ` as EventRecord[]
+    return result
   } catch (error: any) {
     console.error("Failed to fetch events for month:", error)
     return []
@@ -113,15 +108,12 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
 export async function getAllEvents(): Promise<EventRecord[]> {
   const sql = getDbClient()
   try {
-    const result = await sql<EventRecord[]>`
+    const result = await sql`
       SELECT id, title, event_date, event_time, location, description, source_url, scraped_at
       FROM events
       ORDER BY event_date DESC, event_time
-    `
-    return result.map((event) => ({
-      ...event,
-      event_date: new Date(event.event_date),
-    }))
+    ` as EventRecord[]
+    return result
   } catch (error: any) {
     console.error("Failed to fetch all events:", error)
     return []

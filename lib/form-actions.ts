@@ -22,7 +22,7 @@ export async function addWebpage(prevState: FormState, formData: FormData): Prom
 
   try {
     const existing = await sql`SELECT id FROM webpages_to_scrape WHERE url = ${url}`
-    if (existing.count > 0) {
+    if (existing.length > 0) {
       return { error: "URL already exists.", timestamp: Date.now() }
     }
 
