@@ -19,7 +19,7 @@ interface CrawlApp {
 }
 
 export function createCrawl(options: CrawlOptions = {}): CrawlApp {
-  const { maxRetry = 3, timeout = 5000 } = options;
+  const { maxRetry = 3, timeout = 10000 } = options;
 
   return {
     async crawlPage(url: string): Promise<CrawlPageResult> {
@@ -44,7 +44,7 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
           page.setDefaultTimeout(timeout);
           
           await page.goto(url, { 
-            waitUntil: 'domcontentloaded',
+            waitUntil: 'networkidle',
             timeout 
           });
 
