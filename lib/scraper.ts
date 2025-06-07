@@ -163,10 +163,6 @@ export async function scrapeUrlAndStoreEvents(url: string, webpageConfigId: numb
 
     try {
 
-      await page.waitForNetworkIdle({
-        idleTime: 1000,
-      });
-
       // Get HTML content from the page
       const htmlContent = await page.content()
 
