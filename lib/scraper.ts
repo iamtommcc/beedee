@@ -2,9 +2,9 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
 import { convert } from "html-to-text"
-import { createCrawl } from "x-crawl"
 import { z } from "zod"
 import { getDbClient } from "./db"
+import { createCrawl } from "./playwright-crawler"
 import type { EventData } from "./types"
 
 // Initialize Google AI provider
@@ -12,13 +12,12 @@ const google = createGoogleGenerativeAI({
   apiKey: process.env.GEMINI_API_KEY
 })
 
-// Initialize x-crawl client
+// Initialize Playwright crawler client
 const crawlApp = createCrawl({
   maxRetry: 3,
-  intervalTime: { max: 1000, min: 500 },
   timeout: 5000
 })
-console.log("[Scraper] x-crawl client initialized.")
+console.log("[Scraper] Playwright crawler client initialized.")
 
 // Zod schema for structured event extraction
 const EventSchema = z.object({
