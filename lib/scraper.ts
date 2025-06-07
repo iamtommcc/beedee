@@ -1,6 +1,7 @@
 "use server"
 import { createGoogleGenerativeAI } from "@ai-sdk/google"
 import { generateObject } from "ai"
+import console from "console"
 import { convert } from "html-to-text"
 import { z } from "zod"
 import { getDbClient } from "./db"
@@ -155,14 +156,13 @@ export async function scrapeUrlAndStoreEvents(url: string, webpageConfigId: numb
     WHERE id = ${webpageConfigId}
   `
 
-  try {
+    try {
     console.log(`[Scraper] Attempting to fetch page content: ${url}`)
     
     const crawlResult = await crawlApp.crawlPage(url)
     const { page, browser } = crawlResult.data
 
     try {
-
       // Get HTML content from the page
       const htmlContent = await page.content()
 
