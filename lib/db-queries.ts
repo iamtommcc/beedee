@@ -12,11 +12,11 @@ export async function getWebpages(): Promise<WebpageConfig[]> {
       ORDER BY created_at DESC
     ` as WebpageConfig[]
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch webpages:", error)
     // It's important to check if the error is "relation does not exist"
     // and guide the user to run the schema script.
-    if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
+    if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
       console.error(
         "DATABASE SCHEMA MISSING: Please run the SQL script to create tables (e.g., scripts/001-create-tables.sql).",
       )
@@ -41,9 +41,9 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
     `) as EventRecord[]
 
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch events for month:", error)
-    if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
+    if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
       console.error(
         "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
       )
@@ -64,9 +64,9 @@ export async function getAllEvents(): Promise<EventRecord[]> {
     `) as EventRecord[]
 
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch all events:", error)
-    if (error.message?.includes("relation") && error.message?.includes("does not exist")) {
+    if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
       console.error(
         "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
       )

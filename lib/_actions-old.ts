@@ -1,9 +1,9 @@
 "use server"
 
-import { revalidatePath } from "next/cache"
-import { getDbClient } from "./db"
+import { revalidatePath } from "next/cache";
+import { getDbClient } from "./db";
 import type { EventData } from "./scraper"; // Assuming EventData is exported
-import { scrapeUrlAndStoreEvents } from "./scraper"
+import { scrapeUrlAndStoreEvents } from "./scraper";
 
 export interface WebpageConfig {
   id: number
@@ -39,9 +39,10 @@ export async function addWebpage(formData: FormData) {
     `
     revalidatePath("/configure")
     return { success: "URL added successfully. It will be scraped soon." }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to add webpage:", error)
-    return { error: `Database error: ${error.message}` }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Database error: ${errorMessage}` }
   }
 }
 
@@ -54,7 +55,7 @@ export async function getWebpages(): Promise<WebpageConfig[]> {
       ORDER BY created_at DESC
     ` as WebpageConfig[]
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch webpages:", error)
     return []
   }
@@ -66,9 +67,10 @@ export async function deleteWebpage(id: number) {
     await sql`DELETE FROM webpages_to_scrape WHERE id = ${id}`
     revalidatePath("/configure")
     return { success: "URL deleted successfully." }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to delete webpage:", error)
-    return { error: `Database error: ${error.message}` }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Database error: ${errorMessage}` }
   }
 }
 
@@ -79,9 +81,10 @@ export async function triggerScrape(webpageId: number, url: string) {
     revalidatePath("/configure") // To update status potentially
     revalidatePath("/") // To update calendar events
     return { success: `Scraping initiated for ${url}. Check status for updates.` }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Failed to trigger scrape for ${url}:`, error)
-    return { error: `Failed to initiate scrape: ${error.message}` }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Failed to initiate scrape: ${errorMessage}` }
   }
 }
 
@@ -99,7 +102,7 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
       ORDER BY event_date, event_time
     ` as EventRecord[]
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch events for month:", error)
     return []
   }
@@ -114,7 +117,7 @@ export async function getAllEvents(): Promise<EventRecord[]> {
       ORDER BY event_date DESC, event_time
     ` as EventRecord[]
     return result
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to fetch all events:", error)
     return []
   }

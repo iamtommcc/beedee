@@ -32,9 +32,10 @@ export async function addWebpage(prevState: FormState, formData: FormData): Prom
     `
     revalidatePath("/configure")
     return { success: "URL added successfully. It will be scraped soon.", timestamp: Date.now() }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to add webpage:", error)
-    return { error: `Database error: ${error.message}`, timestamp: Date.now() }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Database error: ${errorMessage}`, timestamp: Date.now() }
   }
 }
 
@@ -47,9 +48,10 @@ export async function deleteWebpage(id: number) {
     revalidatePath("/configure")
     revalidatePath("/") // Events might change
     return { success: "URL and associated events deleted successfully." }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to delete webpage:", error)
-    return { error: `Database error: ${error.message}` }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Database error: ${errorMessage}` }
   }
 }
 
@@ -63,9 +65,10 @@ export async function deleteEvent(eventId: number) {
     `
     revalidatePath("/") // Events might change
     return { success: "Event deleted successfully." }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to soft delete event:", error)
-    return { error: `Database error: ${error.message}` }
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Database error: ${errorMessage}` }
   }
 }
 
@@ -76,7 +79,7 @@ export async function deleteAllEvents() {
     revalidatePath("/")
     revalidatePath("/configure")
     redirect("/")
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to delete all events:", error)
     redirect("/")
   }
