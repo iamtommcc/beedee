@@ -186,12 +186,13 @@ export async function scrapeUrlAndStoreEvents(
     console.log(`[Scraper] Attempting to fetch page content: ${url}`)
     
     // Add timeout and better error handling for crawling
+    // @ts-expect-error Waiting for types to be updated
     const crawlResult = await Promise.race([
       crawlApp.crawlPage(url),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Crawl timeout after 30 seconds')), 30000)
       )
-    ]) as any;
+    ]) as any
     
     const { page } = crawlResult.data
     browser = crawlResult.data.browser
