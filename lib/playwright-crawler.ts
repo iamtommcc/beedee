@@ -1,10 +1,6 @@
 import chromium from '@sparticuz/chromium';
 import type { Browser, Page } from 'playwright-core';
-import { chromium as playwright } from 'playwright-extra';
-
-import stealthPlugin from 'puppeteer-extra-plugin-stealth';
-
-playwright.use(stealthPlugin());
+import { chromium as playwright } from 'playwright-core';
 
 interface CrawlOptions {
   maxRetry?: number;
