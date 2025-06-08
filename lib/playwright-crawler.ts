@@ -28,11 +28,22 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
       for (let attempt = 1; attempt <= maxRetry; attempt++) {
         try {
           console.log(`[PlaywrightCrawler] Attempt ${attempt}/${maxRetry} for ${url}`);
-          console.log(await chromium.executablePath());
-          const browser = await playwright.launch({
-            args: chromium.args,
-            executablePath: await chromium.executablePath(),
-          });
+          
+          // Use serverless chromium on Vercel, local Chromium otherwise
+          const isVercel = process.env.VERCEL || process.env.VERCEL_ENV;
+          
+          const browserOptions = isVercel 
+            ? {
+                args: chromium.args,
+                executablePath: await chromium.executablePath(),
+              }
+            : {
+                // Let Playwright find local Chromium installation
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+              };
+
+          console.log(`[PlaywrightCrawler] Running in ${isVercel ? 'Vercel' : 'local'} environment`);
+          const browser = await playwright.launch(browserOptions);
 
           const context = await browser.newContext({
             userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'

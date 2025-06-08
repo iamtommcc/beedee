@@ -24,6 +24,7 @@
     "html-to-text": "^9.0.5",
     "lucide-react": "^0.513.0",
     "next": "15.2.4",
+    "playwright": "^1.52.0",
     "playwright-core": "^1.52.0",
     "react": "^19.0.0",
     "react-day-picker": "^9.7.0",
