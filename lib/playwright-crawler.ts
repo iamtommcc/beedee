@@ -1,6 +1,10 @@
 import chromium from '@sparticuz/chromium';
 import type { Browser, Page } from 'playwright-core';
-import { chromium as playwright } from 'playwright-core';
+import { chromium as playwright } from 'playwright-extra';
+
+import stealthPlugin from 'puppeteer-extra-plugin-stealth';
+
+playwright.use(stealthPlugin());
 
 interface CrawlOptions {
   maxRetry?: number;
@@ -34,19 +38,39 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
           
           const browserOptions = isVercel 
             ? {
-                args: chromium.args,
+                args: [
+                  ...chromium.args,
+                  '--no-first-run',
+                  '--disable-blink-features=AutomationControlled',
+                  '--disable-web-security',
+                  '--disable-features=VizDisplayCompositor'
+                ],
                 executablePath: await chromium.executablePath(),
               }
             : {
-                // Let Playwright find local Chromium installation
-                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                args: [
+                  '--no-first-run',
+                  '--disable-blink-features=AutomationControlled',
+                  '--disable-web-security',
+                  '--disable-features=VizDisplayCompositor'
+                ]
               };
 
           console.log(`[PlaywrightCrawler] Running in ${isVercel ? 'Vercel' : 'local'} environment`);
           const browser = await playwright.launch(browserOptions);
 
           const context = await browser.newContext({
-            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            viewport: { width: 1920, height: 1080 },
+            ignoreHTTPSErrors: true,
+            extraHTTPHeaders: {
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+              'Accept-Language': 'en-US,en;q=0.9',
+              'Accept-Encoding': 'gzip, deflate, br',
+              'DNT': '1',
+              'Connection': 'keep-alive',
+              'Upgrade-Insecure-Requests': '1',
+            }
           });
 
           const page = await context.newPage();
@@ -58,6 +82,9 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
             waitUntil: 'networkidle',
             timeout 
           });
+
+          // Add human-like delay
+          await page.waitForTimeout(Math.random() * 2000 + 1000);
 
           console.log(`[PlaywrightCrawler] Successfully loaded ${url} on attempt ${attempt}`);
           
@@ -75,8 +102,8 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
             throw lastError;
           }
           
-          // Wait before retrying
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          // Wait before retrying with exponential backoff
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt * 2));
         }
       }
       

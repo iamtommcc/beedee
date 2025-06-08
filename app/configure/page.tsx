@@ -1,4 +1,5 @@
 import { AddUrlForm } from "@/components/add-url-form"
+import { ScrapeTrigger } from "@/components/scrape-trigger"
 import { Separator } from "@/components/ui/separator"
 import { UrlList } from "@/components/url-list"
 import { getWebpages } from "@/lib/db-queries"
@@ -14,6 +15,10 @@ export default async function ConfigurePage() {
       </header>
 
       <AddUrlForm />
+
+      <Separator />
+
+      <ScrapeTrigger />
 
       <Separator />
 

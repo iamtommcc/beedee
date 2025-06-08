@@ -6,6 +6,7 @@ export interface WebpageConfig {
   last_scraped_at?: string | null
   status?: string | null
   error_message?: string | null
+  event_count?: number
 }
 
 export interface EventData {

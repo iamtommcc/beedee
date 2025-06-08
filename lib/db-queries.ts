@@ -7,9 +7,19 @@ export async function getWebpages(): Promise<WebpageConfig[]> {
   const sql = getDbClient()
   try {
     const result = await sql`
-      SELECT id, url, organisation_title, created_at, last_scraped_at, status, error_message 
-      FROM webpages_to_scrape 
-      ORDER BY created_at DESC
+      SELECT 
+        w.id, 
+        w.url, 
+        w.organisation_title, 
+        w.created_at, 
+        w.last_scraped_at, 
+        w.status, 
+        w.error_message,
+        COALESCE(COUNT(e.id), 0) as event_count
+      FROM webpages_to_scrape w
+      LEFT JOIN events e ON w.id = e.webpage_config_id AND e.deleted_at IS NULL
+      GROUP BY w.id, w.url, w.organisation_title, w.created_at, w.last_scraped_at, w.status, w.error_message
+      ORDER BY w.created_at DESC
     ` as WebpageConfig[]
     return result
   } catch (error: unknown) {

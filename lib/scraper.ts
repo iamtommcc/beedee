@@ -142,13 +142,38 @@ async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{
   }
 }
 
-export async function scrapeUrlAndStoreEvents(url: string, webpageConfigId: number) {
+export async function scrapeUrlAndStoreEvents(
+  url: string, 
+  webpageConfigId: number,
+  publishProgress?: (data: {
+    siteId: number;
+    url: string; 
+    status: "reading-site" | "processing-events" | "completed" | "failed";
+    message?: string;
+    error?: string;
+  }) => Promise<void>
+) {
   console.log(`[Scraper] scrapeUrlAndStoreEvents called for URL: ${url}, ID: ${webpageConfigId}`)
   const sql = getDbClient()
   if (!sql) {
+    const error = "Database client not available"
     console.error(`[Scraper] DB client not available for ${url}. Aborting.`)
-    return { error: "Database client not available" }
+    await publishProgress?.({
+      siteId: webpageConfigId,
+      url,
+      status: "failed",
+      error
+    })
+    return { error }
   }
+
+  // Publish and update database status to scraping
+  await publishProgress?.({
+    siteId: webpageConfigId,
+    url,
+    status: "reading-site",
+    message: "Starting to scrape website"
+  })
 
   await sql`
     UPDATE webpages_to_scrape 
@@ -156,85 +181,167 @@ export async function scrapeUrlAndStoreEvents(url: string, webpageConfigId: numb
     WHERE id = ${webpageConfigId}
   `
 
-    try {
+  let browser = null;
+  try {
     console.log(`[Scraper] Attempting to fetch page content: ${url}`)
     
-    const crawlResult = await crawlApp.crawlPage(url)
-    const { page, browser } = crawlResult.data
+    // Add timeout and better error handling for crawling
+    const crawlResult = await Promise.race([
+      crawlApp.crawlPage(url),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Crawl timeout after 30 seconds')), 30000)
+      )
+    ]) as any;
+    
+    const { page } = crawlResult.data
+    browser = crawlResult.data.browser
 
-    try {
-      // Get HTML content from the page
-      const htmlContent = await page.content()
+    // Get HTML content from the page with timeout
+    const htmlContent = await Promise.race([
+      page.content(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Page content timeout after 15 seconds')), 15000)
+      )
+    ]) as string;
 
-      if (!htmlContent) {
-        console.warn(`[Scraper] No HTML content fetched for ${url}`)
-        await sql`
-          UPDATE webpages_to_scrape 
-          SET last_scraped_at = NOW(), status = 'failed_no_html', error_message = 'Successfully fetched URL but no HTML content was returned.'
-          WHERE id = ${webpageConfigId}
-        `
-        return
-      }
-      console.log(`[Scraper] Fetch successful for ${url}. HTML content length: ${htmlContent.length}`)
-
-      const { events: extractedEvents, organisationTitle } = await extractEventsFromHTML(htmlContent, url)
-      console.log(`[Scraper] Extracted ${extractedEvents.length} potential events from ${url}`)
-
-      // Update organisation title if found
-      if (organisationTitle) {
-        await sql`
-          UPDATE webpages_to_scrape 
-          SET organisation_title = ${organisationTitle}
-          WHERE id = ${webpageConfigId}
-        `
-        console.log(`[Scraper] Updated organisation title to: ${organisationTitle}`)
-      }
-
-      if (extractedEvents.length === 0) {
-        await sql`
-          UPDATE webpages_to_scrape 
-          SET last_scraped_at = NOW(), status = 'success_no_events_found', error_message = 'Scraped successfully, but no distinct events were identified.'
-          WHERE id = ${webpageConfigId}
-        `
-        return
-      }
-
-      for (const event of extractedEvents) {
-        try {
-          const existingEvent = await sql`
-            SELECT id FROM events
-            WHERE title = ${event.title} AND event_date = ${new Date(event.event_date)} AND source_url = ${event.source_url}
-              AND deleted_at IS NULL
-            LIMIT 1
-          `
-          if (existingEvent.length === 0) {
-            await sql`
-              INSERT INTO events (title, event_date, event_time, location, location_city, description, source_url, webpage_config_id)
-              VALUES (${event.title}, ${new Date(event.event_date)}, ${event.event_time || null}, ${event.location || null}, ${event.location_city || null}, ${event.description || null}, ${event.source_url}, ${webpageConfigId})
-            `
-            console.log(`[Scraper] Inserted new event: "${event.title}" from ${url}`)
-          } else {
-            console.log(`[Scraper] Event already exists: "${event.title}" from ${url}`)
-          }
-        } catch (dbError: unknown) {
-          const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown error'
-          console.error(`[Scraper] DB error inserting event from ${url}: ${errorMessage}`)
-          await sql`
-            UPDATE webpages_to_scrape SET status = 'failed_db_event_insert', error_message = ${`DB error: ${errorMessage}`} WHERE id = ${webpageConfigId}`
-        }
-      }
+    if (!htmlContent) {
+      const error = "Successfully fetched URL but no HTML content was returned"
+      console.warn(`[Scraper] No HTML content fetched for ${url}`)
       await sql`
-        UPDATE webpages_to_scrape SET last_scraped_at = NOW(), status = 'success', error_message = NULL WHERE id = ${webpageConfigId}`
-    } finally {
-      // Always close the browser
-      await browser.close()
+        UPDATE webpages_to_scrape 
+        SET last_scraped_at = NOW(), status = 'failed_no_html', error_message = ${error}
+        WHERE id = ${webpageConfigId}
+      `
+      await publishProgress?.({
+        siteId: webpageConfigId,
+        url,
+        status: "failed",
+        error
+      })
+      return { error }
     }
+    console.log(`[Scraper] Fetch successful for ${url}. HTML content length: ${htmlContent.length}`)
+
+    // Publish processing status
+    await publishProgress?.({
+      siteId: webpageConfigId,
+      url,
+      status: "processing-events",
+      message: "Extracting events from page content"
+    })
+
+    const { events: extractedEvents, organisationTitle } = await extractEventsFromHTML(htmlContent, url)
+    console.log(`[Scraper] Extracted ${extractedEvents.length} potential events from ${url}`)
+
+    // Update organisation title if found
+    if (organisationTitle) {
+      await sql`
+        UPDATE webpages_to_scrape 
+        SET organisation_title = ${organisationTitle}
+        WHERE id = ${webpageConfigId}
+      `
+      console.log(`[Scraper] Updated organisation title to: ${organisationTitle}`)
+    }
+
+    if (extractedEvents.length === 0) {
+      const message = "Scraped successfully, but no distinct events were identified"
+      await sql`
+        UPDATE webpages_to_scrape 
+        SET last_scraped_at = NOW(), status = 'success_no_events_found', error_message = ${message}
+        WHERE id = ${webpageConfigId}
+      `
+      await publishProgress?.({
+        siteId: webpageConfigId,
+        url,
+        status: "completed",
+        message: `Completed: ${message}`
+      })
+      return { success: true, eventsFound: 0 }
+    }
+
+    // Insert events with better error handling
+    let insertedCount = 0;
+    let failedInserts = 0;
+    
+    for (const event of extractedEvents) {
+      try {
+        const existingEvent = await sql`
+          SELECT id FROM events
+          WHERE title = ${event.title} AND event_date = ${new Date(event.event_date)} AND source_url = ${event.source_url}
+            AND deleted_at IS NULL
+          LIMIT 1
+        `
+        if (existingEvent.length === 0) {
+          await sql`
+            INSERT INTO events (title, event_date, event_time, location, location_city, description, source_url, webpage_config_id)
+            VALUES (${event.title}, ${new Date(event.event_date)}, ${event.event_time || null}, ${event.location || null}, ${event.location_city || null}, ${event.description || null}, ${event.source_url}, ${webpageConfigId})
+          `
+          console.log(`[Scraper] Inserted new event: "${event.title}" from ${url}`)
+          insertedCount++
+        } else {
+          console.log(`[Scraper] Event already exists: "${event.title}" from ${url}`)
+        }
+      } catch (dbError: unknown) {
+        failedInserts++
+        const errorMessage = dbError instanceof Error ? dbError.message : 'Unknown error'
+        console.error(`[Scraper] DB error inserting event from ${url}: ${errorMessage}`)
+      }
+    }
+
+    // Handle partial failures
+    if (failedInserts > 0 && insertedCount === 0) {
+      const error = `Failed to insert any events (${failedInserts} failures)`
+      await sql`
+        UPDATE webpages_to_scrape SET status = 'failed_db_event_insert', error_message = ${error} WHERE id = ${webpageConfigId}
+      `
+      await publishProgress?.({
+        siteId: webpageConfigId,
+        url,
+        status: "failed",
+        error
+      })
+      return { error }
+    }
+
+    // Success case
+    const successMessage = `Successfully processed ${extractedEvents.length} events (${insertedCount} new, ${extractedEvents.length - insertedCount} existing)`
+    await sql`
+      UPDATE webpages_to_scrape SET last_scraped_at = NOW(), status = 'success', error_message = NULL WHERE id = ${webpageConfigId}
+    `
+    await publishProgress?.({
+      siteId: webpageConfigId,
+      url,
+      status: "completed",
+      message: successMessage
+    })
+    
+    return { success: true, eventsFound: extractedEvents.length, newEvents: insertedCount }
+
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     const errorStack = error instanceof Error ? error.stack : ''
     console.error(`[Scraper] CRITICAL error during scraping ${url}: ${errorMessage}`, errorStack)
+    
     await sql`
-      UPDATE webpages_to_scrape SET last_scraped_at = NOW(), status = 'failed_exception', error_message = ${errorMessage} WHERE id = ${webpageConfigId}`
+      UPDATE webpages_to_scrape SET last_scraped_at = NOW(), status = 'failed_exception', error_message = ${errorMessage} WHERE id = ${webpageConfigId}
+    `
+    await publishProgress?.({
+      siteId: webpageConfigId,
+      url,
+      status: "failed",
+      error: errorMessage
+    })
+    
+    return { error: errorMessage }
+  } finally {
+    // Always close the browser
+    if (browser) {
+      try {
+        await browser.close()
+      } catch (e) {
+        console.warn(`[Scraper] Error closing browser for ${url}:`, e)
+      }
+    }
   }
 }
 
