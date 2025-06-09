@@ -35,7 +35,7 @@ export async function getWebpages(): Promise<WebpageConfig[]> {
   }
 }
 
-export async function getEventsForMonth(year: number, month: number): Promise<EventRecord[]> {
+export async function getEventsForMonth(year: number, month: number, locationFilter?: string): Promise<EventRecord[]> {
   const sql = getDbClient()
   const startDate = new Date(year, month - 1, 1)
   const endDate = new Date(year, month, 0) // Last day of the month
@@ -47,6 +47,7 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.event_date >= ${startDate.toISOString().split("T")[0]} AND e.event_date <= ${endDate.toISOString().split("T")[0]}
         AND e.deleted_at IS NULL
+        ${locationFilter ? sql`AND e.location_city = ${locationFilter}` : sql``}
       ORDER BY e.event_date, e.event_time
     `) as EventRecord[]
 
@@ -62,7 +63,7 @@ export async function getEventsForMonth(year: number, month: number): Promise<Ev
   }
 }
 
-export async function getAllEvents(): Promise<EventRecord[]> {
+export async function getAllEvents(locationFilter?: string): Promise<EventRecord[]> {
   const sql = getDbClient()
   try {
     const result = (await sql`
@@ -70,12 +71,37 @@ export async function getAllEvents(): Promise<EventRecord[]> {
       FROM events e
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.deleted_at IS NULL
+        ${locationFilter ? sql`AND e.location_city = ${locationFilter}` : sql``}
       ORDER BY e.event_date DESC, e.event_time
     `) as EventRecord[]
 
     return result
   } catch (error: unknown) {
     console.error("Failed to fetch all events:", error)
+    if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
+      console.error(
+        "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
+      )
+    }
+    return []
+  }
+}
+
+export async function getUniqueLocationCities(): Promise<string[]> {
+  const sql = getDbClient()
+  try {
+    const result = await sql`
+      SELECT DISTINCT location_city
+      FROM events
+      WHERE location_city IS NOT NULL 
+        AND location_city != ''
+        AND deleted_at IS NULL
+      ORDER BY location_city ASC
+    ` as { location_city: string }[]
+
+    return result.map(row => row.location_city)
+  } catch (error: unknown) {
+    console.error("Failed to fetch unique location cities:", error)
     if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
       console.error(
         "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",

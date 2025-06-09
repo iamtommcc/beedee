@@ -1,4 +1,3 @@
-import { deleteAllEvents } from "@/lib/form-actions"
 import { Home, Settings } from "lucide-react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
@@ -38,14 +37,6 @@ export default function RootLayout({
                   >
                     <Settings className="mr-1 h-4 w-4" /> Configure
                   </Link>
-                  <form action={deleteAllEvents}>
-                    <button 
-                      type="submit"
-                      className="text-sm font-medium text-red-600 hover:text-red-700 transition-colors px-2 py-1 border border-red-200 rounded hover:bg-red-50"
-                    >
-                      Delete All Events
-                    </button>
-                  </form>
                 </nav>
               </div>
             </header>

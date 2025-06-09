@@ -1,6 +1,11 @@
 import chromium from '@sparticuz/chromium';
-import type { Browser, Page } from 'playwright-core';
 import { chromium as playwright } from 'playwright-core';
+
+const fetchFromScraperApi = async (url: string) => {
+  const response = await fetch(`https://api.scraperapi.com?api_key=${process.env.SCRAPER_API_KEY}&url=${url}&render=true`);
+  return response.text();
+}
+
 
 interface CrawlOptions {
   maxRetry?: number;
@@ -8,10 +13,8 @@ interface CrawlOptions {
 }
 
 interface CrawlPageResult {
-  data: {
-    page: Page;
-    browser: Browser;
-  };
+  html: string;
+  source: 'playwright' | 'scraperapi';
 }
 
 interface CrawlApp {
@@ -19,13 +22,14 @@ interface CrawlApp {
 }
 
 export function createCrawl(options: CrawlOptions = {}): CrawlApp {
-  const { maxRetry = 3, timeout = 10000 } = options;
+  const { maxRetry = 1, timeout = 10000 } = options;
 
   return {
     async crawlPage(url: string): Promise<CrawlPageResult> {
       let lastError: Error | null = null;
       
       for (let attempt = 1; attempt <= maxRetry; attempt++) {
+        let browser = null;
         try {
           console.log(`[PlaywrightCrawler] Attempt ${attempt}/${maxRetry} for ${url}`);
           
@@ -53,7 +57,7 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
               };
 
           console.log(`[PlaywrightCrawler] Running in ${isVercel ? 'Vercel' : 'local'} environment`);
-          const browser = await playwright.launch(browserOptions);
+          browser = await playwright.launch(browserOptions);
 
           const context = await browser.newContext({
             userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -82,24 +86,46 @@ export function createCrawl(options: CrawlOptions = {}): CrawlApp {
           // Add human-like delay
           await page.waitForTimeout(Math.random() * 2000 + 1000);
 
+          // Get HTML content
+          const html = await page.content();
+
           console.log(`[PlaywrightCrawler] Successfully loaded ${url} on attempt ${attempt}`);
           
           return {
-            data: {
-              page,
-              browser
-            }
+            html,
+            source: 'playwright'
           };
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error));
           console.error(`[PlaywrightCrawler] Attempt ${attempt}/${maxRetry} failed for ${url}:`, lastError.message);
           
           if (attempt === maxRetry) {
-            throw lastError;
+            // Fallback to ScraperAPI when all Playwright retries fail
+            console.log(`[PlaywrightCrawler] All Playwright attempts failed, falling back to ScraperAPI for ${url}`);
+            try {
+              const html = await fetchFromScraperApi(url);
+              console.log(`[PlaywrightCrawler] Successfully scraped ${url} using ScraperAPI`);
+              return {
+                html,
+                source: 'scraperapi'
+              };
+            } catch (scraperError) {
+              console.error(`[PlaywrightCrawler] ScraperAPI also failed for ${url}:`, scraperError);
+              throw lastError;
+            }
           }
           
           // Wait before retrying with exponential backoff
           await new Promise(resolve => setTimeout(resolve, 1000 * attempt * 2));
+        } finally {
+          // Always close the browser if it was opened
+          if (browser) {
+            try {
+              await browser.close();
+            } catch (e) {
+              console.warn(`[PlaywrightCrawler] Error closing browser for ${url}:`, e);
+            }
+          }
         }
       }
       

@@ -2,13 +2,18 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { deleteWebpage, getAllWebpages, getScrapingProgressToken, triggerInngestScrape } from "@/lib/form-actions"
+import type { FormState } from "@/lib/form-actions"
+import { addWebpage, deleteWebpage, getAllWebpages, getScrapingProgressToken, triggerFullInngestScrape, triggerInngestScrape } from "@/lib/form-actions"
 import type { WebpageConfig } from "@/lib/types"
 import { useInngestSubscription } from "@inngest/realtime/hooks"
 import { formatDistanceToNow } from "date-fns"
-import { ExternalLink, RefreshCw, Trash2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { ExternalLink, PlayIcon, PlusCircle, RefreshCw, Trash2 } from "lucide-react"
+import { useActionState, useEffect, useRef, useState } from "react"
+import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
 
 async function handleDelete(id: number) {
@@ -22,10 +27,82 @@ async function handleScrape(url: string, id: number) {
   return await triggerInngestScrape(url, id)
 }
 
+async function triggerFullScrape() {
+  try {
+    return await triggerFullInngestScrape();
+  } catch (error: unknown) {
+    console.error('Failed to trigger scraping workflow:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { error: `Failed to initiate scraping workflow: ${errorMessage}` };
+  }
+}
+
 type ScrapingProgress = {
   status: "reading-site" | "processing-events" | "completed" | "failed"
   message?: string
   error?: string
+}
+
+function AddUrlSubmitButton() {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending} className="w-full">
+      {pending ? "Adding..." : "Add URL"}
+    </Button>
+  )
+}
+
+function AddUrlPopover({ onUrlAdded }: { onUrlAdded: () => void }) {
+  const [state, formAction] = useActionState<FormState, FormData>(addWebpage, { timestamp: Date.now() })
+  const formRef = useRef<HTMLFormElement>(null)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (state.success) {
+      toast.success(state.success)
+      formRef.current?.reset()
+      setOpen(false)
+      onUrlAdded()
+    } else if (state.error) {
+      toast.error(state.error)
+    }
+  }, [state, onUrlAdded])
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline">
+          <PlusCircle className="h-4 w-4 mr-2" />
+          Add URL
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h4 className="font-medium leading-none">Add New URL</h4>
+            <p className="text-sm text-muted-foreground">
+              Add a webpage URL to scrape for events.
+            </p>
+          </div>
+          <form ref={formRef} action={formAction} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="url" className="text-sm font-medium">
+                Webpage URL to Scrape
+              </Label>
+              <Input 
+                id="url" 
+                name="url" 
+                type="url" 
+                placeholder="https://example.com/events" 
+                required 
+              />
+            </div>
+            <AddUrlSubmitButton />
+          </form>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig[] }) {
@@ -82,22 +159,36 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
     setWebpages(initialWebpages)
   }, [initialWebpages])
 
+  const refreshWebpages = async () => {
+    try {
+      const updatedWebpages = await getAllWebpages()
+      setWebpages(updatedWebpages)
+    } catch (error) {
+      console.error("Failed to refresh webpage data:", error)
+    }
+  }
+
   const onAction = async (promise: Promise<{ success?: string; error?: string } | null>) => {
     const result = await promise
     if (result?.success) {
       toast.success(result.success)
       // Refresh data after any action
-      try {
-        const updatedWebpages = await getAllWebpages()
-        setWebpages(updatedWebpages)
-      } catch (error) {
-        console.error("Failed to refresh webpage data:", error)
-      }
+      await refreshWebpages()
     }
     if (result?.error) {
       toast.error(result.error)
     }
   }
+
+  const handleScrapeAll = async () => {
+    const result = await triggerFullScrape();
+    if (result.success) {
+      toast.success(result.success);
+    }
+    if (result.error) {
+      toast.error(result.error);
+    }
+  };
 
   const getDisplayStatus = (webpage: WebpageConfig, progress?: ScrapingProgress) => {
     // If there's active progress, show that as priority
@@ -155,21 +246,46 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
   }
 
   if (webpages.length === 0) {
-    return <p className="text-muted-foreground">No webpages configured yet. Add one above.</p>
+    return (
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="space-y-1">
+              <CardTitle>Configured Webpages</CardTitle>
+              <CardDescription>Manage the list of webpages to scrape for events. Status updates in real-time.</CardDescription>
+            </div>
+            <AddUrlPopover onUrlAdded={refreshWebpages} />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground">No webpages configured yet. Add one using the button above.</p>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Configured Webpages</CardTitle>
-        <CardDescription>Manage the list of webpages to scrape for events. Status updates in real-time.</CardDescription>
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <CardTitle>Configured Webpages</CardTitle>
+            <CardDescription>Manage the list of webpages to scrape for events. Status updates in real-time.</CardDescription>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleScrapeAll} variant="default">
+              <PlayIcon className="h-4 w-4 mr-2" />
+              Scrape All
+            </Button>
+            <AddUrlPopover onUrlAdded={refreshWebpages} />
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[30%]">URL</TableHead>
-              <TableHead className="w-[20%]">Organization</TableHead>
+              <TableHead className="w-[40%]">Website</TableHead>
               <TableHead>Events</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Last Scraped</TableHead>
@@ -184,22 +300,22 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
               return (
                 <TableRow key={webpage.id}>
                   <TableCell className="font-medium">
-                    <a
-                      href={webpage.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-primary hover:underline inline-flex items-center"
-                    >
-                      {webpage.url.length > 50 ? `${webpage.url.substring(0, 50)}...` : webpage.url}
-                      <ExternalLink className="h-3 w-3 ml-1" />
-                    </a>
-                  </TableCell>
-                  <TableCell>
-                    {webpage.organisation_title ? (
-                      <span className="text-sm">{webpage.organisation_title}</span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground">Not detected</span>
-                    )}
+                    <div className="space-y-1">
+                      {webpage.organisation_title && (
+                        <div className="text-sm font-medium text-muted-foreground">
+                          {webpage.organisation_title}
+                        </div>
+                      )}
+                      <a
+                        href={webpage.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline inline-flex items-center text-sm"
+                      >
+                        {webpage.url.length > 50 ? `${webpage.url.substring(0, 50)}...` : webpage.url}
+                        <ExternalLink className="h-3 w-3 ml-1" />
+                      </a>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <span className="text-sm font-medium">

@@ -15,8 +15,8 @@ const google = createGoogleGenerativeAI({
 
 // Initialize Playwright crawler client
 const crawlApp = createCrawl({
-  maxRetry: 3,
-  timeout: 15_000
+  maxRetry: 1,
+  timeout: 5000
 })
 console.log("[Scraper] Playwright crawler client initialized.")
 
@@ -26,7 +26,7 @@ const EventSchema = z.object({
   event_date: z.string().describe("The date of the event in YYYY-MM-DD format"),
   event_time: z.string().optional().describe("The time of the event in HH:MM format (24-hour)"),
   location: z.string().optional().describe("The location of the event (physical address or 'Online' if virtual)"),
-  location_city: z.string().optional().describe("The city where the event takes place (e.g. Brisbane, Adelaide, Sydney) or 'Online' for virtual events"),
+  location_city: z.string().optional().describe("The city where the event takes place (e.g. Brisbane, Adelaide, Sydney) or 'Online' for virtual events. Strictly NO suffixes like 'QLD' or 'City'. Major cities only, consolidate suburbs into their major city."),
   description: z.string().optional().describe("A brief description of the event"),
 })
 
@@ -181,28 +181,11 @@ export async function scrapeUrlAndStoreEvents(
     WHERE id = ${webpageConfigId}
   `
 
-  let browser = null;
   try {
     console.log(`[Scraper] Attempting to fetch page content: ${url}`)
     
-    // Add timeout and better error handling for crawling
-    const crawlResult = await Promise.race([
-      crawlApp.crawlPage(url),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Crawl timeout after 30 seconds')), 30000)
-      )
-    ]) as any
-    
-    const { page } = crawlResult.data
-    browser = crawlResult.data.browser
-
-    // Get HTML content from the page with timeout
-    const htmlContent = await Promise.race([
-      page.content(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Page content timeout after 15 seconds')), 15000)
-      )
-    ]) as string;
+    const crawlResult = await crawlApp.crawlPage(url)
+    const htmlContent = crawlResult.html
 
     if (!htmlContent) {
       const error = "Successfully fetched URL but no HTML content was returned"
@@ -333,15 +316,6 @@ export async function scrapeUrlAndStoreEvents(
     })
     
     return { error: errorMessage }
-  } finally {
-    // Always close the browser
-    if (browser) {
-      try {
-        await browser.close()
-      } catch (e) {
-        console.warn(`[Scraper] Error closing browser for ${url}:`, e)
-      }
-    }
   }
 }
 
