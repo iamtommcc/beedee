@@ -29,18 +29,15 @@ export function EventCalendarDisplay({
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [events, setEvents] = useState<EventRecord[]>(initialEvents)
-  const [isLoading, setIsLoading] = useState(false)
   const [deletingEventId, setDeletingEventId] = useState<number | null>(null)
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false)
 
   useEffect(() => {
     async function fetchEvents() {
-      setIsLoading(true)
       const year = currentMonth.getFullYear()
       const month = currentMonth.getMonth() + 1 // 1-indexed for API
       const fetchedEvents = await getEventsForMonth(year, month, locationFilter)
       setEvents(fetchedEvents)
-      setIsLoading(false)
     }
     fetchEvents()
   }, [currentMonth, locationFilter])

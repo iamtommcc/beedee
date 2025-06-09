@@ -61,7 +61,7 @@ export function ICalSubscriptionModal({ locationFilter }: ICalSubscriptionModalP
       <div className="text-sm text-muted-foreground space-y-2">
         <p className="font-medium">How to subscribe:</p>
         <ul className="list-disc list-inside space-y-1 text-xs">
-          <li><strong>Google Calendar:</strong> Click "+" → "From URL" → paste the URL above</li>
+          <li><strong>Google Calendar:</strong> Click &quot;+&quot; → &quot;From URL&quot; → paste the URL above</li>
           <li><strong>Apple Calendar:</strong> File → New Calendar Subscription → paste the URL</li>
           <li><strong>Outlook:</strong> Add calendar → From internet → paste the URL</li>
           <li><strong>Thunderbird:</strong> Right-click calendar list → New Calendar → On the Network</li>
