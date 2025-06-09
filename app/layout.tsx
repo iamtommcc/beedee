@@ -1,12 +1,13 @@
 import { Home, Settings } from "lucide-react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { Inter, Outfit } from "next/font/google"
 import Link from "next/link"
 import type React from "react"
 import { Toaster } from "sonner"; // Corrected import name
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
+const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" })
 
 export const metadata: Metadata = {
   title: "Beedee by Jolie",
@@ -20,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={`${inter.className} ${outfit.variable}`}>
           <div className="flex flex-col min-h-screen">
             <header className="sticky top-0 z-50 w-full border-b bg-background">
               <div className="container flex h-16 items-center px-6">

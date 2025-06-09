@@ -19,7 +19,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 text-center space-y-2">
-        <h1 className="text-4xl font-bold tracking-tight text-primary">Beedee by Jolie</h1>
+        <h1 className="text-4xl font-semibold">Beedee by Jolie</h1>
         <p className="text-xl text-muted-foreground">Track local bizdev events</p>
       </header>
       <EventCalendarDisplay initialEvents={initialEvents} locationCities={locationCities} />

@@ -11,7 +11,7 @@ export default async function ConfigurePage() {
   return (
     <div className="container mx-auto p-4 md:p-8 space-y-8">
       <header className="space-y-1">
-        <h1 className="text-3xl font-bold tracking-tight">Configure</h1>
+        <h1 className="text-3xl font-semibold">Configure</h1>
         <p className="text-muted-foreground">Add and manage URLs for daily event scraping.</p>
       </header>
 

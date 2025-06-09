@@ -15,6 +15,22 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { ICalSubscriptionModal } from "./ical-subscription-modal"
 
+// Helper function to format time from 24-hour to 12-hour format
+function formatEventTime(timeString: string): string {
+  // Handle different time formats that might come from the database
+  const timeMatch = timeString.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/)
+  if (!timeMatch) return timeString // Return original if can't parse
+  
+  const hours = parseInt(timeMatch[1], 10)
+  const minutes = parseInt(timeMatch[2], 10)
+  
+  const period = hours >= 12 ? 'pm' : 'am'
+  const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours
+  const displayMinutes = minutes === 0 ? '' : `:${minutes.toString().padStart(2, '0')}`
+  
+  return `${displayHours}${displayMinutes}${period}`
+}
+
 export function EventCalendarDisplay({ 
   initialEvents = [], 
   locationCities = [] 
@@ -176,7 +192,7 @@ export function EventCalendarDisplay({
 
         <div className="w-full md:col-span-3 p-6 pt-0">
           <div className="mb-6">
-            <h2 className="text-[1.8rem] font-bold tracking-tight">{selectedDate ? format(selectedDate, "MMMM d, yyyy") : "Selected Date"}</h2>
+            <h2 className="text-[1.8rem] font-semibold">{selectedDate ? format(selectedDate, "MMMM d, yyyy") : "Selected Date"}</h2>
             <p className="text-muted-foreground mt-1">
               {selectedDateEvents.length > 0
                 ? `Found ${selectedDateEvents.length} event(s).`
@@ -187,7 +203,7 @@ export function EventCalendarDisplay({
             <ul className="space-y-6">
               {selectedDateEvents.map((event) => (
                 <li key={event.id} className="p-6 border rounded-lg hover:shadow-lg transition-shadow">
-                  <h3 className="font-semibold text-lg">{event.title}</h3>
+                  <h3 className="font-semibold text-lg mb-2">{event.title}</h3>
                   {event.organisation_title && (
                     <p className="text-sm text-muted-foreground flex items-center mt-1">
                       <Building2 className="h-4 w-4 mr-2" />
@@ -197,7 +213,7 @@ export function EventCalendarDisplay({
                   <p className="text-sm text-muted-foreground flex items-center mt-1">
                     <Clock className="h-4 w-4 mr-2" />
                     {format(new Date(event.event_date), "EEE, MMM d, yyyy")}
-                    {event.event_time && ` at ${event.event_time}`}
+                    {event.event_time && ` at ${formatEventTime(event.event_time)}`}
                   </p>
                   {(event.location || event.location_city) && (
                     <p className="text-sm text-muted-foreground flex items-center mt-1">
@@ -215,7 +231,8 @@ export function EventCalendarDisplay({
                       {event.event_url && (
                         <Button
                           asChild
-                          className="h-7 px-3 bg-black hover:bg-gray-800 text-white"
+                          variant="default"
+                          className="h-7 px-3"
                         >
                           <a
                             href={event.event_url}
@@ -241,7 +258,7 @@ export function EventCalendarDisplay({
                         rel="noopener noreferrer"
                         className="text-xs text-muted-foreground hover:underline inline-flex items-center"
                       >
-                        View Source <ExternalLink className="h-3 w-3 ml-1" />
+                        View Other Events <ExternalLink className="h-3 w-3 ml-1" />
                       </a>
                     </div>
                     <Button
