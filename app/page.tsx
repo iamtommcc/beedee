@@ -2,13 +2,13 @@ import { EventCalendarDisplay } from "@/components/event-calendar-display"
 import { getEventsForMonth, getUniqueLocationCities } from "@/lib/db-queries"
 
 interface HomePageProps {
-  searchParams: { location?: string }
+  searchParams: Promise<{ location?: string }>
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
   // Load events for the current month initially
   const today = new Date()
-  const locationFilter = searchParams.location
+  const { location: locationFilter } = await searchParams
   
   // Fetch data in parallel
   const [initialEvents, locationCities] = await Promise.all([

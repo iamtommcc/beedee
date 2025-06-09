@@ -23,8 +23,8 @@ export default function RootLayout({
       <body className={inter.className}>
           <div className="flex flex-col min-h-screen">
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-              <div className="container flex h-14 items-center">
-                <Link href="/" className="mr-6 flex items-center space-x-2">
+              <div className="container flex h-16 items-center px-6">
+                <Link href="/" className="mr-10 flex items-center space-x-2">
                   <span className="font-bold sm:inline-block text-primary">Beedee</span>
                 </Link>
                 <nav className="flex items-center space-x-4 lg:space-x-6">
