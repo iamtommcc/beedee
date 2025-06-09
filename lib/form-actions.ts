@@ -128,6 +128,8 @@ export async function triggerFullInngestScrape() {
 }
 
 export async function getScrapingProgressToken(): Promise<Realtime.Token<typeof scrapingChannel, ["progress"]>> {
+  "use server"
+  
   const token = await getSubscriptionToken(inngest, {
     channel: scrapingChannel(),
     topics: ["progress"],

@@ -2,15 +2,15 @@
 
 import { Button } from "@/components/ui/button"
 import { Calendar, CalendarDayButton } from "@/components/ui/calendar"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Modal } from "@/components/ui/modal"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getEventsForMonth } from "@/lib/db-queries"
 import { deleteEvent } from "@/lib/form-actions"
+import { createSingleEventICS } from "@/lib/ical-utils"
 import type { EventRecord } from "@/lib/types"
 import { format } from "date-fns"
-import { Building2, CalendarDays, Clock, ExternalLink, MapPin, Trash2 } from "lucide-react"
+import { Building2, CalendarDays, CircleXIcon, Clock, Download, ExternalLink, MapPin } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
 import { ICalSubscriptionModal } from "./ical-subscription-modal"
@@ -57,6 +57,19 @@ export function EventCalendarDisplay({
     }
   }
 
+  const handleDownloadEvent = (event: EventRecord) => {
+    const icsContent = createSingleEventICS(event)
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${event.title.replace(/[^a-zA-Z0-9]/g, '_')}.ics`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   const handleLocationFilterChange = (value: string) => {
     const params = new URLSearchParams(searchParams.toString())
     if (value === 'all') {
@@ -88,7 +101,7 @@ export function EventCalendarDisplay({
   return (
     <div className="space-y-6">
       {/* Combined Filter and Subscribe Card */}
-      <Card>
+      <Card className="sticky top-20 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-none">
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2">
@@ -134,7 +147,7 @@ export function EventCalendarDisplay({
 
       <div className="flex gap-6">
         {/* Calendar without card wrapper */}
-        <div className="md:col-span-1">
+        <div className="md:col-span-1 sticky top-48 self-start">
           <Calendar
               mode="single"
               selected={selectedDate}
@@ -152,7 +165,7 @@ export function EventCalendarDisplay({
                     <CalendarDayButton {...props}>
                       {props.day.date.getDate()}
                       {dayHasEvent && (
-                        <span className="absolute bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-primary rounded-full"></span>
+                        <span className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 bg-primary rounded-full"></span>
                       )}
                     </CalendarDayButton>
                   )
@@ -161,93 +174,102 @@ export function EventCalendarDisplay({
             />
         </div>
 
-        <Card className="w-full md:col-span-3">
-          <CardHeader>
-            <CardTitle className="text-2xl">{selectedDate ? format(selectedDate, "MMMM d, yyyy") : "Selected Date"}</CardTitle>
-            <CardDescription>
+        <div className="w-full md:col-span-3 p-6 pt-0">
+          <div className="mb-6">
+            <h2 className="text-[1.8rem] font-bold tracking-tight">{selectedDate ? format(selectedDate, "MMMM d, yyyy") : "Selected Date"}</h2>
+            <p className="text-muted-foreground mt-1">
               {selectedDateEvents.length > 0
                 ? `Found ${selectedDateEvents.length} event(s).`
                 : "No events for this date, or no date selected."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea className="h-[400px] pr-4">
-              {selectedDateEvents.length > 0 ? (
-                <ul className="space-y-4">
-                  {selectedDateEvents.map((event) => (
-                    <li key={event.id} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
-                      <h3 className="font-semibold text-lg">{event.title}</h3>
-                      {event.organisation_title && (
-                        <p className="text-sm text-muted-foreground flex items-center mt-1">
-                          <Building2 className="h-4 w-4 mr-2" />
-                          {event.organisation_title}
-                        </p>
+            </p>
+          </div>
+          {selectedDateEvents.length > 0 ? (
+            <ul className="space-y-6">
+              {selectedDateEvents.map((event) => (
+                <li key={event.id} className="p-6 border rounded-lg hover:shadow-lg transition-shadow">
+                  <h3 className="font-semibold text-lg">{event.title}</h3>
+                  {event.organisation_title && (
+                    <p className="text-sm text-muted-foreground flex items-center mt-1">
+                      <Building2 className="h-4 w-4 mr-2" />
+                      {event.organisation_title}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground flex items-center mt-1">
+                    <Clock className="h-4 w-4 mr-2" />
+                    {format(new Date(event.event_date), "EEE, MMM d, yyyy")}
+                    {event.event_time && ` at ${event.event_time}`}
+                  </p>
+                  {(event.location || event.location_city) && (
+                    <p className="text-sm text-muted-foreground flex items-center mt-1">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      {event.location_city && (
+                        <span className="font-medium mr-1">{event.location_city}</span>
                       )}
-                      <p className="text-sm text-muted-foreground flex items-center mt-1">
-                        <Clock className="h-4 w-4 mr-2" />
-                        {format(new Date(event.event_date), "EEE, MMM d, yyyy")}
-                        {event.event_time && ` at ${event.event_time}`}
-                      </p>
-                      {(event.location || event.location_city) && (
-                        <p className="text-sm text-muted-foreground flex items-center mt-1">
-                          <MapPin className="h-4 w-4 mr-2" />
-                          {event.location_city && (
-                            <span className="font-medium mr-1">{event.location_city}</span>
-                          )}
-                          {event.location && event.location_city && " - "}
-                          {event.location}
-                        </p>
-                      )}
-                      {event.description && <p className="mt-2 text-sm">{event.description}</p>}
-                      <div className="flex items-center justify-between mt-3">
-                        <div className="flex items-center gap-3">
-                          {event.event_url && (
-                            <a
-                              href={event.event_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-primary hover:underline inline-flex items-center font-medium"
-                            >
-                              View Event <ExternalLink className="h-3 w-3 ml-1" />
-                            </a>
-                          )}
+                      {event.location && event.location_city && " - "}
+                      {event.location}
+                    </p>
+                  )}
+                  {event.description && <p className="mt-2 text-sm">{event.description}</p>}
+                  <div className="flex items-center justify-between mt-3">
+                    <div className="flex items-center gap-3">
+                      {event.event_url && (
+                        <Button
+                          asChild
+                          className="h-7 px-3 bg-black hover:bg-gray-800 text-white"
+                        >
                           <a
-                            href={event.source_url}
+                            href={event.event_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs text-muted-foreground hover:underline inline-flex items-center"
+                            className="inline-flex items-center text-sm font-medium"
                           >
-                            View Source <ExternalLink className="h-3 w-3 ml-1" />
+                            View Event <ExternalLink className="h-3 w-3 ml-1" />
                           </a>
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteEvent(event.id)}
-                          disabled={deletingEventId === event.id}
-                          className="h-7 px-2"
-                        >
-                          {deletingEventId === event.id ? (
-                            "Deleting..."
-                          ) : (
-                            <>
-                              <Trash2 className="h-3 w-3 mr-1" />
-                              Delete
-                            </>
-                          )}
                         </Button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  {selectedDate ? "No events scheduled for this day." : "Please select a day on the calendar."}
-                </p>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+                      )}
+                      <Button
+                        onClick={() => handleDownloadEvent(event)}
+                        variant="outline"
+                        className="h-7 px-3"
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        Download Event
+                      </Button>
+                      <a
+                        href={event.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground hover:underline inline-flex items-center"
+                      >
+                        View Source <ExternalLink className="h-3 w-3 ml-1" />
+                      </a>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDeleteEvent(event.id)}
+                      disabled={deletingEventId === event.id}
+                      className="h-7 px-2"
+                    >
+                      {deletingEventId === event.id ? (
+                        "Deleting..."
+                      ) : (
+                        <>
+                          <CircleXIcon className="h-3 w-3 mr-1" />
+                          Delete
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-muted-foreground text-center py-8">
+              {selectedDate ? "No events scheduled for this day." : "Please select a day on the calendar."}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   )

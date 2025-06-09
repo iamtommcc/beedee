@@ -17,11 +17,11 @@ export default async function ConfigurePage() {
 
       <UrlList webpages={webpages} />
 
-      <Card className="border-destructive/20">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-destructive">Danger Zone</CardTitle>
+          <CardTitle>Danger Zone</CardTitle>
           <CardDescription>
-            Irreversible actions that will permanently delete data from your system.
+            Irreversible actions that will permanently delete data from Beedee.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -35,9 +35,6 @@ export default async function ConfigurePage() {
               Delete All Events
             </Button>
           </form>
-          <p className="text-sm text-muted-foreground mt-2">
-            This will permanently delete all events from the database. URLs and configurations will remain intact.
-          </p>
         </CardContent>
       </Card>
     </div>

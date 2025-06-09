@@ -1,0 +1,13 @@
+diff --git a/dist/hooks.js b/dist/hooks.js
+index cae0467313354dbce147f320b09236d367f2124e..8f41ca6c2c24fc5a03cf072a4c654c90073968db 100644
+--- a/dist/hooks.js
++++ b/dist/hooks.js
+@@ -114,7 +114,7 @@ function useInngestSubscription({ token: tokenInput, refreshToken, key, enabled
+             cancelled = true;
+             if (subscriptionRef.current) {
+                 setState(InngestSubscriptionState.Closing);
+-                subscriptionRef.current.cancel().finally(() => {
++                subscriptionRef.current.cancel().catch(() => {}).finally(() => {
+                     setState(InngestSubscriptionState.Closed);
+                 });
+             }

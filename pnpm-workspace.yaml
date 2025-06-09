@@ -1,0 +1,2 @@
+patchedDependencies:
+  '@inngest/realtime': patches/@inngest__realtime.patch

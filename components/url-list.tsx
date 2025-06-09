@@ -11,7 +11,7 @@ import { addWebpage, deleteWebpage, getAllWebpages, getScrapingProgressToken, tr
 import type { WebpageConfig } from "@/lib/types"
 import { useInngestSubscription } from "@inngest/realtime/hooks"
 import { formatDistanceToNow } from "date-fns"
-import { ExternalLink, PlayIcon, PlusCircle, RefreshCw, Trash2 } from "lucide-react"
+import { CircleXIcon, ExternalLink, PlayIcon, PlusCircle, RefreshCw } from "lucide-react"
 import { useActionState, useEffect, useRef, useState } from "react"
 import { useFormStatus } from "react-dom"
 import { toast } from "sonner"
@@ -113,6 +113,8 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
   // Subscribe to realtime scraping progress updates
   const { data: progressData } = useInngestSubscription({
     refreshToken: getScrapingProgressToken,
+    enabled: true,
+    key: "scraping-progress",
   })
 
   // Update local progress state when new realtime data arrives
@@ -287,7 +289,7 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
             <TableRow>
               <TableHead className="w-[40%]">Website</TableHead>
               <TableHead>Events</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="w-[200px]">Status</TableHead>
               <TableHead>Last Scraped</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -322,7 +324,7 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
                       {webpage.event_count || 0}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell width={'250px'}>
                     <div className="space-y-1">
                       <span
                         className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${displayStatus.className}`}
@@ -337,7 +339,7 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
                       )}
                       
                       {displayStatus.error && (
-                        <p className="text-xs text-red-600" title={displayStatus.error}>
+                        <p className="text-xs text-red-600 whitespace-break-spaces" title={displayStatus.error}>
                           {displayStatus.error.length > 50
                             ? `${displayStatus.error.substring(0, 50)}...`
                             : displayStatus.error}
@@ -369,7 +371,7 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
                       </form>
                       <form action={async () => await onAction(handleDelete(webpage.id))}>
                         <Button type="submit" size="sm" variant="destructive">
-                          <Trash2 className="h-4 w-4 mr-1" />
+                          <CircleXIcon className="h-4 w-4 mr-1" />
                           Delete
                         </Button>
                       </form>
