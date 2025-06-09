@@ -17,6 +17,7 @@ export interface EventData {
   location_city?: string
   description?: string
   source_url: string
+  event_url?: string // Direct link to the specific event listing page
 }
 
 export interface EventRecord extends EventData {

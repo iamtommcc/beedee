@@ -42,7 +42,7 @@ export async function getEventsForMonth(year: number, month: number, locationFil
 
   try {
     const result = (await sql`
-      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
+      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.event_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
       FROM events e
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.event_date >= ${startDate.toISOString().split("T")[0]} AND e.event_date <= ${endDate.toISOString().split("T")[0]}
@@ -67,7 +67,7 @@ export async function getAllEvents(locationFilter?: string): Promise<EventRecord
   const sql = getDbClient()
   try {
     const result = (await sql`
-      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
+      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.event_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
       FROM events e
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.deleted_at IS NULL

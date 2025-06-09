@@ -46,7 +46,7 @@ export const planCrawls = inngest.createFunction(
 export const crawlSite = inngest.createFunction(
   { 
     id: "crawl-site",
-    concurrency: { limit: 10 } // Adjust based on your needs
+    concurrency: { limit: 5 } // Adjust based on your needs
   },
   { event: "crawl/site.requested" },
   async ({ event, step, publish }) => {

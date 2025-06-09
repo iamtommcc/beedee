@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "NODE_OPTIONS='--enable-source-maps' pnpx inngest-cli@latest dev -u http://localhost:3000/api/inngest & next dev --turbopack",
-    "lint": "next lint"
+    "lint": "next lint && pnpm tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/google": "^1.2.19",

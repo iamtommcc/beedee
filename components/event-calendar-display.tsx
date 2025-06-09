@@ -200,14 +200,26 @@ export function EventCalendarDisplay({
                       )}
                       {event.description && <p className="mt-2 text-sm">{event.description}</p>}
                       <div className="flex items-center justify-between mt-3">
-                        <a
-                          href={event.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline inline-flex items-center"
-                        >
-                          View Source <ExternalLink className="h-3 w-3 ml-1" />
-                        </a>
+                        <div className="flex items-center gap-3">
+                          {event.event_url && (
+                            <a
+                              href={event.event_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline inline-flex items-center font-medium"
+                            >
+                              View Event <ExternalLink className="h-3 w-3 ml-1" />
+                            </a>
+                          )}
+                          <a
+                            href={event.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-muted-foreground hover:underline inline-flex items-center"
+                          >
+                            View Source <ExternalLink className="h-3 w-3 ml-1" />
+                          </a>
+                        </div>
                         <Button
                           variant="destructive"
                           size="sm"

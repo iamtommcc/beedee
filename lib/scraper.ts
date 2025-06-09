@@ -28,6 +28,7 @@ const EventSchema = z.object({
   location: z.string().optional().describe("The location of the event (physical address or 'Online' if virtual)"),
   location_city: z.string().optional().describe("The city where the event takes place (e.g. Brisbane, Adelaide, Sydney) or 'Online' for virtual events. Strictly NO suffixes like 'QLD' or 'City'. Major cities only, consolidate suburbs into their major city."),
   description: z.string().optional().describe("A brief description of the event"),
+  event_url: z.string().optional().describe("The direct URL/link to this specific event's page (often found in brackets next to event titles like 'Event Title [https://example.com/event]')"),
 })
 
 const EventsListSchema = z.object({
@@ -69,6 +70,31 @@ function preprocessHTML(html: string): string {
   }
 }
 
+// Helper function to convert relative URLs to absolute URLs
+function makeAbsoluteUrl(eventUrl: string, sourceUrl: string): string {
+  if (!eventUrl) return eventUrl;
+  
+  // If already absolute URL, return as-is
+  if (eventUrl.startsWith('http://') || eventUrl.startsWith('https://')) {
+    return eventUrl;
+  }
+  
+  // If relative URL starting with "/", prepend the domain from sourceUrl
+  if (eventUrl.startsWith('/')) {
+    try {
+      const url = new URL(sourceUrl);
+      return `${url.protocol}//${url.host}${eventUrl}`;
+    } catch (error) {
+      console.warn(`[Scraper] Failed to parse source URL ${sourceUrl}, returning relative URL as-is:`, error);
+      return eventUrl;
+    }
+  }
+  
+  // For other relative URLs (not starting with /), return as-is for now
+  // Could be enhanced to handle relative paths like "event.html" in the future
+  return eventUrl;
+}
+
 // AI-powered event extraction using Gemini 2.5 flash preview
 async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{ events: EventData[], organisationTitle?: string }> {
   if (!html) {
@@ -105,6 +131,7 @@ async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{
         - Locations (physical addresses or "Online" for virtual events)
         - Location cities (just the city name like Brisbane, Adelaide, Sydney, or "Online" for virtual events)
         - Descriptions
+        - Event URLs (direct links to specific event pages, often found in brackets after event titles like "Event Title [https://example.com/event]" or "Event Title [/event/123]")
         
         Only include events that:
         1. Have a clear event date that is today (${today}) or in the future
@@ -113,6 +140,8 @@ async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{
 
         DO NOT include or make up events that are not in the content.
         
+        Note: The text has been processed so that anchor tags appear as "text [URL]" format where the URL in brackets is the direct link to that specific content.
+        
         Structured text content:
         ${processedText}
       `
@@ -120,15 +149,26 @@ async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{
 
     const futureEvents: EventData[] = result.object.events
       .filter(event => event.event_date && event.event_date >= today)
-      .map(event => ({
-        title: event.title,
-        event_date: event.event_date,
-        event_time: event.event_time,
-        location: event.location,
-        location_city: event.location_city,
-        description: event.description,
-        source_url: sourceUrl
-      }))
+      .map(event => {
+        let processedEventUrl = event.event_url;
+        if (event.event_url) {
+          processedEventUrl = makeAbsoluteUrl(event.event_url, sourceUrl);
+          if (processedEventUrl !== event.event_url) {
+            console.log(`[Scraper] Converted relative URL "${event.event_url}" to absolute URL "${processedEventUrl}" for event "${event.title}"`);
+          }
+        }
+        
+        return {
+          title: event.title,
+          event_date: event.event_date,
+          event_time: event.event_time,
+          location: event.location,
+          location_city: event.location_city,
+          description: event.description,
+          source_url: sourceUrl,
+          event_url: processedEventUrl
+        };
+      })
 
     console.log(`[Scraper] Gemini 2.5 flash preview extracted ${futureEvents.length} future events from ${sourceUrl}`)
     return { 
@@ -256,8 +296,8 @@ export async function scrapeUrlAndStoreEvents(
         `
         if (existingEvent.length === 0) {
           await sql`
-            INSERT INTO events (title, event_date, event_time, location, location_city, description, source_url, webpage_config_id)
-            VALUES (${event.title}, ${new Date(event.event_date)}, ${event.event_time || null}, ${event.location || null}, ${event.location_city || null}, ${event.description || null}, ${event.source_url}, ${webpageConfigId})
+            INSERT INTO events (title, event_date, event_time, location, location_city, description, source_url, event_url, webpage_config_id)
+            VALUES (${event.title}, ${new Date(event.event_date)}, ${event.event_time || null}, ${event.location || null}, ${event.location_city || null}, ${event.description || null}, ${event.source_url}, ${event.event_url || null}, ${webpageConfigId})
           `
           console.log(`[Scraper] Inserted new event: "${event.title}" from ${url}`)
           insertedCount++
