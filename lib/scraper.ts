@@ -24,11 +24,11 @@ console.log("[Scraper] Playwright crawler client initialized.")
 const EventSchema = z.object({
   title: z.string().describe("The title or name of the event"),
   event_date: z.string().describe("The date of the event in YYYY-MM-DD format"),
-  event_time: z.string().optional().describe("The time of the event in HH:MM format (24-hour)"),
-  location: z.string().optional().describe("The location of the event (physical address or 'Online' if virtual)"),
-  location_city: z.string().optional().describe("The city where the event takes place (e.g. Brisbane, Adelaide, Sydney) or 'Online' for virtual events. Strictly NO suffixes like 'QLD' or 'City'. Major cities only, consolidate suburbs into their major city."),
-  description: z.string().optional().describe("A brief description of the event"),
-  event_url: z.string().optional().describe("The direct URL/link to this specific event's page (often found in brackets next to event titles like 'Event Title [https://example.com/event]')"),
+  event_time: z.string().optional().transform(val => val === "null" || !val ? undefined : val).describe("The time of the event in HH:MM format (24-hour)"),
+  location: z.string().optional().transform(val => val === "null" || !val ? undefined : val).describe("The location of the event (physical address or 'Online' if virtual)"),
+  location_city: z.enum(["Sydney", "Melbourne", "Brisbane", "Perth", "Adelaide", "Hobart", "Darwin", "Canberra", "Online"]).optional().describe("The city where the event takes place. Must be one of the Australian capital cities or 'Online' for virtual events. Consolidate suburbs into their major city."),
+  description: z.string().optional().transform(val => val === "null" || !val ? undefined : val).describe("A brief description of the event"),
+  event_url: z.string().optional().transform(val => val === "null" || !val ? undefined : val).describe("The direct URL/link to this specific event's page (often found in brackets next to event titles like 'Event Title [https://example.com/event]')"),
 })
 
 const EventsListSchema = z.object({
@@ -118,7 +118,7 @@ async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{
     console.log(`[Scraper] Using Gemini 2.5 flash preview to extract events from ${sourceUrl}`)
     
     const result = await generateObject({
-      model: google("gemini-2.5-flash-preview-04-17"),
+      model: google("gemini-2.5-flash"),
       schema: EventsListSchema,
       prompt: `
         Analyze this structured text content (ripped from a webpage) and extract all future events (events that occur on or after ${today}).
@@ -129,7 +129,7 @@ async function extractEventsFromHTML(html: string, sourceUrl: string): Promise<{
         - Dates (convert to YYYY-MM-DD format)
         - Times (convert to HH:MM 24-hour format)
         - Locations (physical addresses or "Online" for virtual events)
-        - Location cities (just the city name like Brisbane, Adelaide, Sydney, or "Online" for virtual events)
+        - Location cities (must be one of: Sydney, Melbourne, Brisbane, Perth, Adelaide, Hobart, Darwin, Canberra, or "Online" for virtual events - consolidate suburbs into their major city)
         - Descriptions
         - Event URLs (direct links to specific event pages, often found in brackets after event titles like "Event Title [https://example.com/event]" or "Event Title [/event/123]")
         

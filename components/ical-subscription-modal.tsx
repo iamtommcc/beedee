@@ -6,13 +6,24 @@ import { toast } from "sonner"
 
 interface ICalSubscriptionModalProps {
   locationFilter?: string
+  categoryFilters?: string[]
 }
 
-export function ICalSubscriptionModal({ locationFilter }: ICalSubscriptionModalProps) {
+export function ICalSubscriptionModal({ locationFilter, categoryFilters }: ICalSubscriptionModalProps) {
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : ''
-  const icalUrl = locationFilter 
-    ? `${baseUrl}/api/ical?location_city=${encodeURIComponent(locationFilter)}`
-    : `${baseUrl}/api/ical`
+  
+  const buildICalUrl = () => {
+    const url = new URL(`${baseUrl}/api/ical`)
+    if (locationFilter) {
+      url.searchParams.set('location_city', locationFilter)
+    }
+    if (categoryFilters && categoryFilters.length > 0) {
+      url.searchParams.set('categories', categoryFilters.join(','))
+    }
+    return url.toString()
+  }
+  
+  const icalUrl = buildICalUrl()
 
   const copyToClipboard = async () => {
     try {
@@ -50,9 +61,14 @@ export function ICalSubscriptionModal({ locationFilter }: ICalSubscriptionModalP
             <ExternalLink className="h-4 w-4" />
           </Button>
         </div>
-        {locationFilter && (
+        {(locationFilter || (categoryFilters && categoryFilters.length > 0)) && (
           <p className="text-xs text-muted-foreground">
-            This feed is filtered to show events for: <strong>{locationFilter}</strong>
+            This feed is filtered to show events
+            {locationFilter && <> for location: <strong>{locationFilter}</strong></>}
+            {locationFilter && categoryFilters && categoryFilters.length > 0 && <> and</>}
+            {categoryFilters && categoryFilters.length > 0 && (
+              <> in {categoryFilters.length === 1 ? 'category' : 'categories'}: <strong>{categoryFilters.join(', ')}</strong></>
+            )}
           </p>
         )}
       </div>

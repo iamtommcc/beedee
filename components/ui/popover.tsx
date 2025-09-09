@@ -1,7 +1,7 @@
 "use client"
 
-import * as React from "react"
 import * as PopoverPrimitive from "@radix-ui/react-popover"
+import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
@@ -24,7 +24,19 @@ function PopoverContent({
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   return (
-    <PopoverPrimitive.Portal>
+    <PopoverPrimitive.Portal
+      container={(function () {
+        let container: HTMLElement | undefined
+        if (typeof document !== "undefined") {
+          const el = document.querySelector('[data-slot="sheet-content"]') as HTMLElement | null
+          if (el) {
+            console.log("Popover container:", el)
+            container = el
+          }
+        }
+        return container
+      })()}
+    >
       <PopoverPrimitive.Content
         data-slot="popover-content"
         align={align}
@@ -45,4 +57,5 @@ function PopoverAnchor({
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
 
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor }
+export { Popover, PopoverAnchor, PopoverContent, PopoverTrigger }
+

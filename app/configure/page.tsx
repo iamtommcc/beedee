@@ -17,9 +17,9 @@ export default async function ConfigurePage() {
 
       <UrlList webpages={webpages} />
 
-      <Card>
+      {process.env.NODE_ENV === "development" && <Card>
         <CardHeader>
-          <CardTitle>Danger Zone</CardTitle>
+          <CardTitle>Dev Danger Zone</CardTitle>
           <CardDescription>
             Irreversible actions that will permanently delete data from Beedee.
           </CardDescription>
@@ -36,7 +36,7 @@ export default async function ConfigurePage() {
             </Button>
           </form>
         </CardContent>
-      </Card>
+      </Card>}
     </div>
   )
 }

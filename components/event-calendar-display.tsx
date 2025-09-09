@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button"
 import { Calendar, CalendarDayButton } from "@/components/ui/calendar"
 import { Card, CardContent } from "@/components/ui/card"
 import { Modal } from "@/components/ui/modal"
+import { MultiSelect, MultiSelectOption } from "@/components/ui/multi-select"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getEventsForMonth } from "@/lib/db-queries"
 import { deleteEvent } from "@/lib/form-actions"
 import { createSingleEventICS } from "@/lib/ical-utils"
 import type { EventRecord } from "@/lib/types"
+import { CATEGORIES } from "@/lib/types"
 import { format } from "date-fns"
 import { Building2, CalendarDays, CircleXIcon, Clock, Download, ExternalLink, MapPin } from "lucide-react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -33,14 +35,20 @@ function formatEventTime(timeString: string): string {
 
 export function EventCalendarDisplay({ 
   initialEvents = [], 
-  locationCities = [] 
+  locationCities = [],
+  categories = []
 }: { 
   initialEvents?: EventRecord[]
   locationCities?: string[]
+  categories?: string[]
 }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const locationFilter = searchParams.get('location') || undefined
+  const categoriesParam = searchParams.get('categories')
+  const categoryFilters = useMemo(() => {
+    return categoriesParam ? categoriesParam.split(',') : []
+  }, [categoriesParam])
   
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
@@ -52,11 +60,11 @@ export function EventCalendarDisplay({
     async function fetchEvents() {
       const year = currentMonth.getFullYear()
       const month = currentMonth.getMonth() + 1 // 1-indexed for API
-      const fetchedEvents = await getEventsForMonth(year, month, locationFilter)
+      const fetchedEvents = await getEventsForMonth(year, month, locationFilter, categoryFilters.length > 0 ? categoryFilters : undefined)
       setEvents(fetchedEvents)
     }
     fetchEvents()
-  }, [currentMonth, locationFilter])
+  }, [currentMonth, locationFilter, categoryFilters])
 
   const handleDeleteEvent = async (eventId: number) => {
     setDeletingEventId(eventId)
@@ -96,6 +104,16 @@ export function EventCalendarDisplay({
     router.push(`?${params.toString()}`)
   }
 
+  const handleCategoryFilterChange = (selectedCategories: string[]) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (selectedCategories.length === 0) {
+      params.delete('categories')
+    } else {
+      params.set('categories', selectedCategories.join(','))
+    }
+    router.push(`?${params.toString()}`)
+  }
+
   const eventsByDate = useMemo(() => {
     const map = new Map<string, EventRecord[]>()
     events.forEach((event) => {
@@ -114,29 +132,49 @@ export function EventCalendarDisplay({
     return Array.from(eventsByDate.keys()).map((dateStr) => new Date(dateStr + "T00:00:00"))
   }, [eventsByDate])
 
+  const categoryOptions: MultiSelectOption[] = categories.map((category) => ({
+    value: category,
+    label: CATEGORIES.find(c => c.value === category)?.label || category
+  }))
+
   return (
     <div className="space-y-6">
       {/* Combined Filter and Subscribe Card */}
       <Card className="sticky top-20 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shadow-none">
         <CardContent>
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <label htmlFor="location-filter" className="text-sm font-medium">
-                Location:
-              </label>
-              <Select value={locationFilter || 'all'} onValueChange={handleLocationFilterChange}>
-                <SelectTrigger id="location-filter" className="w-[200px]">
-                  <SelectValue placeholder="All locations" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All locations</SelectItem>
-                  {locationCities.map((city) => (
-                    <SelectItem key={city} value={city}>
-                      {city}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label htmlFor="location-filter" className="text-sm font-medium">
+                  Location:
+                </label>
+                <Select value={locationFilter || 'all'} onValueChange={handleLocationFilterChange}>
+                  <SelectTrigger id="location-filter" className="w-[200px]">
+                    <SelectValue placeholder="All locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All locations</SelectItem>
+                    {locationCities.map((city) => (
+                      <SelectItem key={city} value={city}>
+                        {city}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <label htmlFor="category-filter" className="text-sm font-medium">
+                  Categories:
+                </label>
+                <MultiSelect
+                  options={categoryOptions}
+                  selected={categoryFilters}
+                  onSelectionChange={handleCategoryFilterChange}
+                  placeholder="All categories"
+                  className="w-[280px]"
+                />
+              </div>
             </div>
             
             <Button 
@@ -158,7 +196,7 @@ export function EventCalendarDisplay({
         title="Subscribe to Calendar"
         className="max-w-lg"
       >
-        <ICalSubscriptionModal locationFilter={locationFilter} />
+        <ICalSubscriptionModal locationFilter={locationFilter} categoryFilters={categoryFilters} />
       </Modal>
 
       <div className="flex gap-6">

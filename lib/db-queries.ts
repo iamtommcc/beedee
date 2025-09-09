@@ -15,10 +15,11 @@ export async function getWebpages(): Promise<WebpageConfig[]> {
         w.last_scraped_at, 
         w.status, 
         w.error_message,
+        w.categories,
         COALESCE(COUNT(e.id), 0) as event_count
       FROM webpages_to_scrape w
       LEFT JOIN events e ON w.id = e.webpage_config_id AND e.deleted_at IS NULL
-      GROUP BY w.id, w.url, w.organisation_title, w.created_at, w.last_scraped_at, w.status, w.error_message
+      GROUP BY w.id, w.url, w.organisation_title, w.created_at, w.last_scraped_at, w.status, w.error_message, w.categories
       ORDER BY w.created_at DESC
     ` as WebpageConfig[]
     return result
@@ -35,19 +36,20 @@ export async function getWebpages(): Promise<WebpageConfig[]> {
   }
 }
 
-export async function getEventsForMonth(year: number, month: number, locationFilter?: string): Promise<EventRecord[]> {
+export async function getEventsForMonth(year: number, month: number, locationFilter?: string, categoryFilters?: string[]): Promise<EventRecord[]> {
   const sql = getDbClient()
   const startDate = new Date(year, month - 1, 1)
   const endDate = new Date(year, month, 0) // Last day of the month
 
   try {
     const result = (await sql`
-      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.event_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
+      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.event_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title, w.categories
       FROM events e
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.event_date >= ${startDate.toISOString().split("T")[0]} AND e.event_date <= ${endDate.toISOString().split("T")[0]}
         AND e.deleted_at IS NULL
         ${locationFilter ? sql`AND e.location_city = ${locationFilter}` : sql``}
+        ${categoryFilters && categoryFilters.length > 0 ? sql`AND w.categories ?| ${categoryFilters}` : sql``}
       ORDER BY e.event_date, e.event_time
     `) as EventRecord[]
 
@@ -63,15 +65,16 @@ export async function getEventsForMonth(year: number, month: number, locationFil
   }
 }
 
-export async function getAllEvents(locationFilter?: string): Promise<EventRecord[]> {
+export async function getAllEvents(locationFilter?: string, categoryFilters?: string[]): Promise<EventRecord[]> {
   const sql = getDbClient()
   try {
     const result = (await sql`
-      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.event_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title
+      SELECT e.id, e.title, e.event_date, e.event_time, e.location, e.location_city, e.description, e.source_url, e.event_url, e.scraped_at, e.deleted_at, e.webpage_config_id, w.organisation_title, w.categories
       FROM events e
       LEFT JOIN webpages_to_scrape w ON e.webpage_config_id = w.id
       WHERE e.deleted_at IS NULL
         ${locationFilter ? sql`AND e.location_city = ${locationFilter}` : sql``}
+        ${categoryFilters && categoryFilters.length > 0 ? sql`AND w.categories ?| ${categoryFilters}` : sql``}
       ORDER BY e.event_date DESC, e.event_time
     `) as EventRecord[]
 
@@ -105,6 +108,29 @@ export async function getUniqueLocationCities(): Promise<string[]> {
     if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
       console.error(
         "DATABASE SCHEMA MISSING: The 'events' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
+      )
+    }
+    return []
+  }
+}
+
+export async function getUniqueCategories(): Promise<string[]> {
+  const sql = getDbClient()
+  try {
+    const result = await sql`
+      SELECT DISTINCT jsonb_array_elements_text(categories) as category
+      FROM webpages_to_scrape 
+      WHERE categories IS NOT NULL 
+        AND jsonb_array_length(categories) > 0
+      ORDER BY category ASC
+    ` as { category: string }[]
+
+    return result.map(row => row.category)
+  } catch (error: unknown) {
+    console.error("Failed to fetch unique categories:", error)
+    if (error instanceof Error && error.message?.includes("relation") && error.message?.includes("does not exist")) {
+      console.error(
+        "DATABASE SCHEMA MISSING: The 'webpages_to_scrape' table does not exist. Please run the SQL script (scripts/001-create-tables.sql).",
       )
     }
     return []

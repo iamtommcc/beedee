@@ -1,19 +1,18 @@
 "use client"
 
+import { AddEditURLSheet } from "@/components/add-edit-url-sheet"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { FormState } from "@/lib/form-actions"
-import { addWebpage, deleteWebpage, getAllWebpages, getScrapingProgressToken, triggerFullInngestScrape, triggerInngestScrape } from "@/lib/form-actions"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { deleteWebpage, getAllWebpages, getScrapingProgressToken, triggerFullInngestScrape, triggerInngestScrape } from "@/lib/form-actions"
 import type { WebpageConfig } from "@/lib/types"
+import { CATEGORIES } from "@/lib/types"
 import { useInngestSubscription } from "@inngest/realtime/hooks"
 import { formatDistanceToNow } from "date-fns"
-import { CircleXIcon, ExternalLink, PlayIcon, PlusCircle, RefreshCw } from "lucide-react"
-import { useActionState, useEffect, useRef, useState } from "react"
-import { useFormStatus } from "react-dom"
+import { CircleXIcon, ExternalLink, PlayIcon, RefreshCw } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 
 async function handleDelete(id: number) {
@@ -43,72 +42,12 @@ type ScrapingProgress = {
   error?: string
 }
 
-function AddUrlSubmitButton() {
-  const { pending } = useFormStatus()
-  return (
-    <Button type="submit" disabled={pending} className="w-full">
-      {pending ? "Adding..." : "Add URL"}
-    </Button>
-  )
-}
-
-function AddUrlPopover({ onUrlAdded }: { onUrlAdded: () => void }) {
-  const [state, formAction] = useActionState<FormState, FormData>(addWebpage, { timestamp: Date.now() })
-  const formRef = useRef<HTMLFormElement>(null)
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    if (state.success) {
-      toast.success(state.success)
-      formRef.current?.reset()
-      setOpen(false)
-      onUrlAdded()
-    } else if (state.error) {
-      toast.error(state.error)
-    }
-  }, [state, onUrlAdded])
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline">
-          <PlusCircle className="h-4 w-4 mr-2" />
-          Add URL
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80">
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <h4 className="font-medium leading-none">Add New URL</h4>
-            <p className="text-sm text-muted-foreground">
-              Add a webpage URL to scrape for events.
-            </p>
-          </div>
-          <form ref={formRef} action={formAction} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="url" className="text-sm font-medium">
-                Webpage URL to Scrape
-              </Label>
-              <Input 
-                id="url" 
-                name="url" 
-                type="url" 
-                placeholder="https://example.com/events" 
-                required 
-              />
-            </div>
-            <AddUrlSubmitButton />
-          </form>
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-}
 
 export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig[] }) {
   // Keep local copy of webpages that gets updated
   const [webpages, setWebpages] = useState<WebpageConfig[]>(initialWebpages)
   const [scrapingProgress, setScrapingProgress] = useState<Record<number, ScrapingProgress>>({})
+  const [queuedScrapes, setQueuedScrapes] = useState<Set<number>>(new Set())
 
   // Subscribe to realtime scraping progress updates
   const { data: progressData } = useInngestSubscription({
@@ -136,6 +75,13 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
 
         // When scraping completes or fails, refresh the webpage data from database
         if (progressStatus === "completed" || progressStatus === "failed") {
+          // Clear queued status
+          setQueuedScrapes(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(siteId)
+            return newSet
+          })
+
           // Refresh the webpage data to get the updated database status
           getAllWebpages().then(updatedWebpages => {
             setWebpages(updatedWebpages)
@@ -182,6 +128,14 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
     }
   }
 
+  const handleScrapeClick = async (webpage: WebpageConfig) => {
+    // Instantly mark as queued
+    setQueuedScrapes(prev => new Set(prev).add(webpage.id))
+    
+    // Perform the actual scrape
+    await onAction(handleScrape(webpage.url, webpage.id))
+  }
+
   const handleScrapeAll = async () => {
     const result = await triggerFullScrape();
     if (result.success) {
@@ -192,7 +146,17 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
     }
   };
 
-  const getDisplayStatus = (webpage: WebpageConfig, progress?: ScrapingProgress) => {
+  const getDisplayStatus = (webpage: WebpageConfig, progress?: ScrapingProgress, isQueued = false) => {
+    // If queued, show queued status immediately
+    if (isQueued && !progress) {
+      return {
+        label: "⏳ Queued",
+        className: "bg-yellow-100 text-yellow-800",
+        message: undefined,
+        error: undefined
+      }
+    }
+
     // If there's active progress, show that as priority
     if (progress) {
       return {
@@ -243,31 +207,34 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
                 webpage.status?.startsWith("failed") ? "bg-red-100 text-red-800" :
                 "bg-gray-100 text-gray-800",
       message: undefined,
-      error: webpage.error_message
+      error: webpage.status === "success_no_events_found" ? null : webpage.error_message
     }
   }
 
   if (webpages.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <CardTitle>Configured Webpages</CardTitle>
-              <CardDescription>Manage the list of webpages to scrape for events. Status updates in real-time.</CardDescription>
+      <TooltipProvider>
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <CardTitle>Configured Webpages</CardTitle>
+                <CardDescription>Manage the list of webpages to scrape for events. Status updates in real-time.</CardDescription>
+              </div>
+              <AddEditURLSheet mode="add" onSuccess={refreshWebpages} />
             </div>
-            <AddUrlPopover onUrlAdded={refreshWebpages} />
-          </div>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground">No webpages configured yet. Add one using the button above.</p>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">No webpages configured yet. Add one using the button above.</p>
+          </CardContent>
+        </Card>
+      </TooltipProvider>
     )
   }
 
   return (
-    <Card>
+    <TooltipProvider>
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div className="space-y-2">
@@ -279,7 +246,7 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
               <PlayIcon className="h-4 w-4 mr-2" />
               Scrape All
             </Button>
-            <AddUrlPopover onUrlAdded={refreshWebpages} />
+            <AddEditURLSheet mode="add" onSuccess={refreshWebpages} />
           </div>
         </div>
       </CardHeader>
@@ -287,27 +254,26 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[40%]">Website</TableHead>
+              <TableHead className="w-[35%]">Website</TableHead>
               <TableHead>Events</TableHead>
-              <TableHead className="w-[200px]">Status</TableHead>
-              <TableHead>Last Scraped</TableHead>
+              <TableHead style={{ width: "160px", minWidth: "160px", maxWidth: "160px" }}>Status</TableHead>
+              <TableHead style={{ width: "160px", minWidth: "160px", maxWidth: "160px" }}>Last Scraped</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {webpages.map((webpage) => {
               const progress = scrapingProgress[webpage.id]
-              const displayStatus = getDisplayStatus(webpage, progress)
+              const isQueued = queuedScrapes.has(webpage.id)
+              const displayStatus = getDisplayStatus(webpage, progress, isQueued)
               
               return (
                 <TableRow key={webpage.id}>
-                  <TableCell className="font-medium">
-                    <div className="space-y-1">
-                      {webpage.organisation_title && (
-                        <div className="text-sm font-medium text-muted-foreground">
-                          {webpage.organisation_title}
+                  <TableCell className="font-medium py-4">
+                    <div>
+                      <div className="text-sm font-medium">
+                          {webpage.organisation_title || new URL(webpage.url).hostname.replace("www.", "")}
                         </div>
-                      )}
                       <a
                         href={webpage.url}
                         target="_blank"
@@ -317,6 +283,23 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
                         {webpage.url.length > 50 ? `${webpage.url.substring(0, 50)}...` : webpage.url}
                         <ExternalLink className="h-3 w-3 ml-1" />
                       </a>
+                      <div className="flex flex-wrap gap-1">
+                        {webpage.categories && webpage.categories.length > 0 ? (
+                          webpage.categories.slice(0, 3).map((categoryValue) => {
+                            const category = CATEGORIES.find(cat => cat.value === categoryValue)
+                            return (
+                              <Badge key={categoryValue} variant="secondary" className="text-xs mt-1">
+                                {category?.label || categoryValue}
+                              </Badge>
+                            )
+                          })
+                        ) : null}
+                        {webpage.categories && webpage.categories.length > 3 && (
+                          <Badge variant="secondary" className="text-xs">
+                            +{webpage.categories.length - 3}
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>
@@ -324,55 +307,57 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
                       {webpage.event_count || 0}
                     </span>
                   </TableCell>
-                  <TableCell width={'250px'}>
-                    <div className="space-y-1">
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${displayStatus.className}`}
-                      >
-                        {displayStatus.label}
-                      </span>
-                      
-                      {displayStatus.message && (
-                        <p className="text-xs text-muted-foreground">
-                          {displayStatus.message}
-                        </p>
+                  <TableCell style={{ width: "160px", minWidth: "160px", maxWidth: "160px" }}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium cursor-help ${displayStatus.className}`}
+                        >
+                          {displayStatus.label}
+                        </span>
+                      </TooltipTrigger>
+                      {(displayStatus.message || displayStatus.error) && (
+                        <TooltipContent>
+                          <div className="space-y-1">
+                            {displayStatus.message && (
+                              <p className="text-xs">
+                                {displayStatus.message}
+                              </p>
+                            )}
+                            {displayStatus.error && (
+                              <p className="text-xs text-red-400">
+                                {displayStatus.error}
+                              </p>
+                            )}
+                          </div>
+                        </TooltipContent>
                       )}
-                      
-                      {displayStatus.error && (
-                        <p className="text-xs text-red-600 whitespace-break-spaces" title={displayStatus.error}>
-                          {displayStatus.error.length > 50
-                            ? `${displayStatus.error.substring(0, 50)}...`
-                            : displayStatus.error}
-                        </p>
-                      )}
-                    </div>
+                    </Tooltip>
                   </TableCell>
-                  <TableCell>
+                  <TableCell style={{ width: "160px", minWidth: "160px", maxWidth: "160px" }}>
                     {webpage.last_scraped_at
                       ? formatDistanceToNow(new Date(webpage.last_scraped_at), { addSuffix: true })
                       : "Never"}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex gap-2 justify-end">
-                      <form
-                        action={async () => {
-                          await onAction(handleScrape(webpage.url, webpage.id))
-                        }}
+                      <AddEditURLSheet 
+                        mode="edit" 
+                        webpage={webpage} 
+                        onSuccess={refreshWebpages} 
+                      />
+                      <Button 
+                        onClick={async () => await handleScrapeClick(webpage)}
+                        size="sm" 
+                        variant="outline"
+                        disabled={!!progress && progress.status !== "completed" && progress.status !== "failed"}
                       >
-                        <Button 
-                          type="submit" 
-                          size="sm" 
-                          variant="outline"
-                          disabled={!!progress && progress.status !== "completed" && progress.status !== "failed"}
-                        >
-                          <RefreshCw className="h-4 w-4 mr-1" />
-                          Scrape
-                        </Button>
-                      </form>
+                        <RefreshCw className="h-4 w-4 mr-1" />
+                        Scrape
+                      </Button>
                       <form action={async () => await onAction(handleDelete(webpage.id))}>
-                        <Button type="submit" size="sm" variant="destructive">
-                          <CircleXIcon className="h-4 w-4 mr-1" />
-                          Delete
+                        <Button type="submit" size="sm" variant="destructive" className="w-8">
+                          <CircleXIcon className="h-4 w-4" />
                         </Button>
                       </form>
                     </div>
@@ -384,5 +369,6 @@ export function UrlList({ webpages: initialWebpages }: { webpages: WebpageConfig
         </Table>
       </CardContent>
     </Card>
+    </TooltipProvider>
   )
 }

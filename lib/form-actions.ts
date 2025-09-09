@@ -18,9 +18,23 @@ export interface FormState {
 export async function addWebpage(prevState: FormState, formData: FormData): Promise<FormState> {
   const sql = getDbClient()
   const url = formData.get("url") as string
+  const categoriesString = formData.get("categories") as string
 
   if (!url || !/^https?:\/\/.+/.test(url)) {
     return { error: "Invalid URL format.", timestamp: Date.now() }
+  }
+
+  // Parse categories from form data (comes as JSON string)
+  let categories: string[] = []
+  if (categoriesString) {
+    try {
+      categories = JSON.parse(categoriesString)
+      if (!Array.isArray(categories)) {
+        categories = []
+      }
+    } catch {
+      categories = []
+    }
   }
 
   try {
@@ -30,13 +44,62 @@ export async function addWebpage(prevState: FormState, formData: FormData): Prom
     }
 
     await sql`
-      INSERT INTO webpages_to_scrape (url, status) 
-      VALUES (${url}, 'pending')
+      INSERT INTO webpages_to_scrape (url, status, categories) 
+      VALUES (${url}, 'pending', ${JSON.stringify(categories)})
     `
     revalidatePath("/configure")
     return { success: "URL added successfully. It will be scraped soon.", timestamp: Date.now() }
   } catch (error: unknown) {
     console.error("Failed to add webpage:", error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return { error: `Database error: ${errorMessage}`, timestamp: Date.now() }
+  }
+}
+
+export async function updateWebpage(prevState: FormState, formData: FormData): Promise<FormState> {
+  const sql = getDbClient()
+  const id = formData.get("id") as string
+  const url = formData.get("url") as string
+  const categoriesString = formData.get("categories") as string
+
+  if (!id || !url || !/^https?:\/\/.+/.test(url)) {
+    return { error: "Invalid input data.", timestamp: Date.now() }
+  }
+
+  const webpageId = parseInt(id, 10)
+  if (isNaN(webpageId)) {
+    return { error: "Invalid webpage ID.", timestamp: Date.now() }
+  }
+
+  // Parse categories from form data (comes as JSON string)
+  let categories: string[] = []
+  if (categoriesString) {
+    try {
+      categories = JSON.parse(categoriesString)
+      if (!Array.isArray(categories)) {
+        categories = []
+      }
+    } catch {
+      categories = []
+    }
+  }
+
+  try {
+    // Check if URL already exists for a different webpage
+    const existing = await sql`SELECT id FROM webpages_to_scrape WHERE url = ${url} AND id != ${webpageId}`
+    if (existing.length > 0) {
+      return { error: "URL already exists for another webpage.", timestamp: Date.now() }
+    }
+
+    await sql`
+      UPDATE webpages_to_scrape 
+      SET url = ${url}, categories = ${JSON.stringify(categories)}
+      WHERE id = ${webpageId}
+    `
+    revalidatePath("/configure")
+    return { success: "URL updated successfully.", timestamp: Date.now() }
+  } catch (error: unknown) {
+    console.error("Failed to update webpage:", error)
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return { error: `Database error: ${errorMessage}`, timestamp: Date.now() }
   }
